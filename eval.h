@@ -2,6 +2,7 @@
 #define EVAL_H
 
 #include "position.h"
+#include "nnue.h"
 #include <cassert>
 
 int simple_evaluate(const Position& pos) {

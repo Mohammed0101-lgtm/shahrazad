@@ -4,6 +4,9 @@
 #include <cassert>
 #include <vector>
 #include <arm_neon.h>
+#include <cstdint>
+#include "position.h"
+
 
 /*
 ====================================================================
@@ -22,7 +25,6 @@ int feature_key(int king_square, pieceType piece_type, int square, int color) {
     return (square + (p_idx + king_square * 10)) * 64;
 }
 
-
 std::vector<int> get_active_features(const Position& pos, int color) {
     std::vector<int> active_features;
     Bitboard occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
@@ -35,10 +37,8 @@ std::vector<int> get_active_features(const Position& pos, int color) {
         int key = feature_key(pos.king_square(color), pos.pieceOn(sq), sq, color);
         active_features.push_back(key);
     }
-
     return active_features;
 }
-
 
 std::vector<int> get_added_features(const Position& cur_pos, const Position& prev_pos, int color) {
     std::vector<int> active_features = get_active_features(cur_pos, color);
@@ -75,21 +75,17 @@ std::vector<int16_t> LinearLayer::getWeights(const int index) const {
     return weights[index];
 }
 
-
 int LinearLayer::get_num_outputs() const { 
     return outputs.size(); 
 }
-
 
 int LinearLayer::get_num_inputs() const { 
     return inputs.size();  
 }
 
-
 std::vector<int16_t> LinearLayer::getBias() const { 
     return biases;         
 }
-
 
 LinearLayer::LinearLayer(int input_size, int output_size, double lr) {
     assert(input_size  > 0);
@@ -107,7 +103,6 @@ LinearLayer::LinearLayer(int input_size, int output_size, double lr) {
         }
     }
 }
-
 
 std::vector<int16_t> LinearLayer::feedForward(const std::vector<int16_t>& input) {
     assert(input.size() == input_dims);
@@ -128,7 +123,6 @@ std::vector<int16_t> LinearLayer::feedForward(const std::vector<int16_t>& input)
 
     return outputs;
 }
-
 
 std::vector<int16_t> LinearLayer::backPropagate(const std::vector<int16_t>& grad) {
     assert(grad.size() == output_dims);
@@ -156,7 +150,6 @@ std::vector<int16_t> LinearLayer::backPropagate(const std::vector<int16_t>& grad
     return prev_layer_grad;
 }
 
-
 std::vector<int16_t> NNue::linear(
                                     const LinearLayer&          layer,
                                           std::vector<int16_t>& output,
@@ -177,7 +170,6 @@ std::vector<int16_t> NNue::linear(
 }
 
 /*
-
 =============================================================
          for accelerated optimised implementation :
 =============================================================
@@ -277,7 +269,6 @@ std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t> output, const std::
     return output;
 }
 
-
 float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) const {
     int color = pos.getSide();
 
@@ -318,34 +309,30 @@ float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) cons
 
 void NNue::refresh_accumulator (
                                     const LinearLayer&             layer,
-                                          NNue::Accumulator<size>& new_acc,
                                     const std::vector<int>&        active_features,
                                     int                            side
                                 ) {
 
     for (int i = 0; i < size; ++i) {
-        new_acc[side][i] = layer.getBias()[i];
+        caches[side][i] = layer.getBias()[i];
     }
 
     for (int a : active_features) {
         for (int i = 0; i < size; ++i) {
-            new_acc[side][i] += layer.getWeights(a)[i];
+            caches[side][i] += layer.getWeights(a)[i];
         }
     }
 }
 
-
 void NNue::update_accumulator(
                                 const LinearLayer&              layer,
-                                      NNue::Accumulator<size>&  new_acc,
-                                const NNue::Accumulator<size>&  prev_acc,
                                 const std::vector<int>&         removed_features,
                                 const std::vector<int>&         added_features,
                                 int                             perspective
                             ) {
-
+    NNue::Accumulator<size> new_acc = caches;
     for (int i = 0; i < size; ++i) {
-        new_acc[perspective][i] = prev_acc[perspective][i];
+        new_acc[perspective][i] = caches[perspective][i];
     }
 
     for (int r : removed_features) {
@@ -359,6 +346,8 @@ void NNue::update_accumulator(
             new_acc[perspective][i] += layer.getWeights(a)[i];
         }
     }
+
+    caches = new_acc;
 }
 
 /*
@@ -429,5 +418,4 @@ void update_accumulator (
         vst1q_s64(&new_acc[side][i * register_width], regs[i]);
     }
 }
-
 */

@@ -3,12 +3,11 @@
 
 #include "bitboard.h"
 #include "types.h"
-#include "nnue.h"
 
+#include <vector>
 
 inline uint64_t pieceKeys[12][64];
 inline uint64_t sideKey[2];
-
 
 class Position {
 public:
@@ -45,7 +44,6 @@ public:
     Position *prev;
 
     bool needs_refresh[2];
-    NNue::Accumulator<size> accumulator;
 
     Position() : current_side(WHITE) {
         for (int i = 0; i < 64; i++) {
@@ -76,8 +74,6 @@ public:
     Bitboard occupancy() const;
 
     void switch_side();
-
-    bool isAttacked(int sq, int color) const;
 
     void do_move(const Move& move);
 

@@ -4,6 +4,8 @@
 #include "bitboard.h"
 #include "types.h"
 #include "position.h"
+#include <vector>
+#include <cassert>
 
 const size_t size = 768;
 
@@ -11,7 +13,6 @@ int feature_index(int king_square, int square, int color, pieceType piece_type) 
     int p_idx = piece_type * 2 + color;
     return (square + (p_idx + king_square * 10)) * 64;
 }
-
 
 class LinearLayer {
 private:
@@ -76,15 +77,12 @@ public:
     
     void refresh_accumulator(   
                                 const LinearLayer&       layer, 
-                                      Accumulator<size>& new_acc,
                                 const std::vector<int>&  active_features, 
                                       int                side
                             );
 
     void update_accumulator(    
                                 const LinearLayer&             layer, 
-                                      NNue::Accumulator<size>& new_acc,
-                                const NNue::Accumulator<size>& prev_acc, 
                                 const std::vector<int>&        removed_features, 
                                 const std::vector<int>&        added_features, 
                                 int                            perspective
@@ -105,6 +103,7 @@ public:
 };
 
 extern NNue nnue = NNue();
+extern NNue::Accumulator<size> caches;
 
 int feature_key(int king_square, pieceType piece_type, int square, int color);
 

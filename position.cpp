@@ -1,5 +1,4 @@
 #include "position.h"
-#include "nnue.h"
 #include "move.h"
 #include <cassert>
 #include <vector>
@@ -13,7 +12,6 @@ Bitboard Position::_black_occupancy() const {
     return occ;
 }
 
-
 Bitboard Position::_white_occupancy() const {
     Bitboard occ = white_bishops.board() | white_king.board()  |
                    white_knights.board() | white_pawns.board() |
@@ -22,7 +20,6 @@ Bitboard Position::_white_occupancy() const {
     return occ;
 }
 
-
 Bitboard Position::occupancy() const {
     Bitboard occ =  _black_occupancy().board() | 
                     _white_occupancy().board() ;
@@ -30,19 +27,16 @@ Bitboard Position::occupancy() const {
     return occ;
 }
 
-
 pieceType Position::pieceOn(const int sq) const {
     assert(sq < 64 && sq >= 0);
     return pieces[sq];
 }
-
 
 bool Position::isAttacked(int sq, int color) const {
     assert(color == WHITE || color == BLACK); 
     return color == WHITE ? 
                 attacked_white[sq] : attacked_black[sq]; 
 }
-
 
 bool Position::canCastle(int castle_side) const { return castle_perm[castle_side]; }
 
@@ -54,11 +48,9 @@ Position Position::get_previous_position() const { return *prev; }
 
 void Position::switch_side() { current_side ^= 1; }
 
-
 int Position::king_square(int color) const { 
     return color == WHITE ? white_king.square() : black_king.square(); 
 }
-
 
 bool Position::isPiece(int sq, pieceType piece) const {
     assert( sq >= 0 && sq <= 64 );
@@ -66,7 +58,6 @@ bool Position::isPiece(int sq, pieceType piece) const {
         return false;
     return true;
 }
-
 
 int Position::material_score() const {
     int score = 0;
@@ -104,7 +95,6 @@ int Position::material_score() const {
     return score;
 }
 
-
 unsigned int Position::getColor(int sq) const {
     pieceType piece = pieceOn(sq);
 
@@ -116,7 +106,6 @@ unsigned int Position::getColor(int sq) const {
 
     return occ.is_bitset(sq) ? WHITE : BLACK;
 }
-
 
 int Position::numberOf(pieceType piece, int color) const {
     assert( color < BOTH && color >= WHITE );
@@ -148,7 +137,6 @@ int Position::numberOf(pieceType piece, int color) const {
     }
 }
 
-
 void Position::make_null_move() {
     Position *previous_pos = this;
     switch_side();
@@ -159,104 +147,10 @@ void Position::make_null_move() {
 }
 
 
-void Position::do_move(const Move& move) {
-    unsigned int from = move.getFrom();
-    unsigned int to = move.getTo();
-    unsigned int _flag = move.getFlags();
-    unsigned int _color = getColor(from);
-    pieceType piece = pieceOn(from);
-
-    assert(from < 64 && from >= 0);
-    assert(to < 64 && to >= 0);
-    assert(_color == current_side);
-
-    Position *previous_position = this;
-    pieces[from] = NOPE;
-    pieces[to] = piece;
-
-    if (piece == PAWN || move.isCapture()) {
-        fifty_moves_counter = 0;
-    } else {
-        fifty_moves_counter++;
-    }
-
-    switch_side();
-    played_positions.emplace_back(position_key);
-    stacked_his++;
-
-    if (piece == KING) {
-        castle_perm[0] = false;
-        castle_perm[1] = false;
-    }
-
-    switch (piece) {
-        case KING:
-            _color == WHITE ?
-            white_king.move_bit(from, to):
-            black_king.move_bit(from, to);
-            break;
-        
-        case PAWN:
-            _color == WHITE ?
-            white_pawns.move_bit(from, to):
-            black_pawns.move_bit(from, to);
-            break;
- 
-        case KNIGHT:
-            _color == WHITE ?
-            white_knights.move_bit(from, to):
-            black_knights.move_bit(from, to);
-            break;
- 
-        case BISHOP:
-            _color == WHITE ?
-            white_bishops.move_bit(from, to):
-            black_bishops.move_bit(from, to);
-            break;
- 
-        case ROOK:
-            _color == WHITE ?
-            white_rooks.move_bit(from, to):
-            black_rooks.move_bit(from, to);
-            break;
- 
-        case QUEEN:
-            _color == WHITE ?
-            white_queens.move_bit(from, to):
-            black_queens.move_bit(from, to);
-            break;
- 
-        default : 
-            break;
-    }
-
-    for (int perspective : { WHITE, BLACK }) {
-        if (needs_refresh[perspective]) {
-            nnue.refresh_accumulator(
-                                        nnue.l_0,
-                                        this->accumulator,
-                                        get_active_features(*this, perspective),
-                                        perspective
-                                    );
-        } else {
-            nnue.update_accumulator(
-                                        nnue.l_0,
-                                        this->accumulator,
-                                        prev->accumulator,
-                                        get_removed_features(*this, *prev, perspective),
-                                        get_added_features(*this, *prev, perspective),
-                                        perspective 
-                                    );
-        }
-    }
-}
-
-
 void Position::undo_move(const Move move) {
     *this = *prev;    
     this->prev = &Position(played_positions[played_positions.size() - 1]);
 }
-
 
 int Position::isPinned(const int sq) const {
     if (pieces[sq] == NOPE) return false; 
@@ -302,7 +196,6 @@ int Position::isPinned(const int sq) const {
 
     return NOPE;
 }
-
 
 uint64_t genPositionKey(const Position& pos) {
     uint64_t key;
