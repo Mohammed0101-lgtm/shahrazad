@@ -14,25 +14,25 @@ struct ttBucket;
 class TranspositionTable;
 
 struct TT_data {
-public:
-    int16_t  eval; 
+  public:
+    int16_t  eval;
     int16_t  bound;
     uint16_t move;
     int8_t   value;
-    uint16_t pos_key; 
+    uint16_t pos_key;
     uint8_t  depth;
 };
 
 struct ttEntry {
-private:    
+  private:
     TT_data data;
-public:
+
+  public:
     friend class TranspositionTable;
 
     TT_data read() const;
 
-    void save(TT_data& d);
-
+    void    save(TT_data& d);
 };
 
 struct ttBucket {
@@ -40,24 +40,24 @@ struct ttBucket {
     uint16_t age;
 };
 
-class TranspositionTable {
-public:
-    ~TranspositionTable() { 
+class TranspositionTable
+{
+  public:
+    ~TranspositionTable() {
         // This would only work with posix complient systems
         // otherwise you would need alligned allocation and freeing
-        free(table); 
+        free(table);
     }
-    
-    ttEntry *probe(const uint64_t key) const;
-    
-private:
+
+    ttEntry* probe(const uint64_t key) const;
+
+  private:
     friend struct ttEntry;
 
     size_t    capacity; // remember to initialize this variable
-    size_t    table_size  = 0; 
-    ttBucket *table       = nullptr;
+    size_t    table_size  = 0;
+    ttBucket* table       = nullptr;
     uint8_t   generations = 0;
 };
-
 
 #endif // TTABLE_H

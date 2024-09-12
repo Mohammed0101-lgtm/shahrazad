@@ -1,12 +1,11 @@
 #include "nnue.h"
 
-#include <math.h>
-#include <cassert>
-#include <vector>
-#include <arm_neon.h>
-#include <cstdint>
 #include "position.h"
-
+#include <arm_neon.h>
+#include <cassert>
+#include <cstdint>
+#include <math.h>
+#include <vector>
 
 /*
 ====================================================================
@@ -19,7 +18,6 @@
 #define __builtin_neon_vst1q_v
 */
 
-
 int feature_key(int king_square, pieceType piece_type, int square, int color) {
     int p_idx = piece_type * 2 + color;
     return (square + (p_idx + king_square * 10)) * 64;
@@ -27,42 +25,50 @@ int feature_key(int king_square, pieceType piece_type, int square, int color) {
 
 std::vector<int> get_active_features(const Position& pos, int color) {
     std::vector<int> active_features;
-    Bitboard occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    Bitboard         occupancy =
+        color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
 
     for (int sq = 0; sq < 64; sq++) {
         if (!occupancy.is_bitset(sq)) {
             continue;
         }
 
-        int key = feature_key(pos.king_square(color), pos.pieceOn(sq), sq, color);
+        int key =
+            feature_key(pos.king_square(color), pos.pieceOn(sq), sq, color);
         active_features.push_back(key);
     }
     return active_features;
 }
 
-std::vector<int> get_added_features(const Position& cur_pos, const Position& prev_pos, int color) {
+std::vector<int> get_added_features(
+    const Position& cur_pos, const Position& prev_pos, int color) {
     std::vector<int> active_features = get_active_features(cur_pos, color);
-    std::vector<int> prev_features = get_active_features(prev_pos, color);
-    const int size = active_features.size();
+    std::vector<int> prev_features   = get_active_features(prev_pos, color);
+    const int        size            = active_features.size();
 
     std::vector<int> result;
 
     for (int i = 0; i < size; i++) {
-        if (std::find(prev_features.begin(), prev_features.end(), active_features[i]) == prev_features.end()) {
+        if (std::find(
+                prev_features.begin(), prev_features.end(),
+                active_features[i]) == prev_features.end()) {
             result.push_back(active_features[i]);
         }
     }
     return result;
 }
 
-std::vector<int> get_removed_features(const Position& cur_pos , const Position& prev_pos, int color) {
+std::vector<int> get_removed_features(
+    const Position& cur_pos, const Position& prev_pos, int color) {
     std::vector<int> active_features = get_active_features(cur_pos, color);
-    std::vector<int> prev_features = get_active_features(prev_pos, color);
-    const int size = prev_features.size();
+    std::vector<int> prev_features   = get_active_features(prev_pos, color);
+    const int        size            = prev_features.size();
     std::vector<int> result;
 
     for (int i = 0; i < size; i++) {
-        if (std::find(active_features.begin(), active_features.end(), prev_features[i]) == prev_features.end()) {
+        if (std::find(
+                active_features.begin(), active_features.end(),
+                prev_features[i]) == prev_features.end()) {
             result.push_back(prev_features[i]);
         }
     }
@@ -75,25 +81,19 @@ std::vector<int16_t> LinearLayer::getWeights(const int index) const {
     return weights[index];
 }
 
-int LinearLayer::get_num_outputs() const { 
-    return outputs.size(); 
-}
+int LinearLayer::get_num_outputs() const { return outputs.size(); }
 
-int LinearLayer::get_num_inputs() const { 
-    return inputs.size();  
-}
+int LinearLayer::get_num_inputs() const { return inputs.size(); }
 
-std::vector<int16_t> LinearLayer::getBias() const { 
-    return biases;         
-}
+std::vector<int16_t> LinearLayer::getBias() const { return biases; }
 
 LinearLayer::LinearLayer(int input_size, int output_size, double lr) {
-    assert(input_size  > 0);
+    assert(input_size > 0);
     assert(output_size > 0);
 
     output_dims = output_size;
-    input_dims = input_size;
-    eta = lr;
+    input_dims  = input_size;
+    eta         = lr;
 
     for (int i = 0; i < output_size; i++) {
         weights.push_back(std::vector<int16_t>());
@@ -104,7 +104,8 @@ LinearLayer::LinearLayer(int input_size, int output_size, double lr) {
     }
 }
 
-std::vector<int16_t> LinearLayer::feedForward(const std::vector<int16_t>& input) {
+std::vector<int16_t>
+LinearLayer::feedForward(const std::vector<int16_t>& input) {
     assert(input.size() == input_dims);
 
     outputs = std::vector<int16_t>();
@@ -113,7 +114,7 @@ std::vector<int16_t> LinearLayer::feedForward(const std::vector<int16_t>& input)
     for (int i = 0; i < output_dims; i++) {
         double sum = 0.0;
 
-        for (int w = 0; w < input_dims; w++) {    
+        for (int w = 0; w < input_dims; w++) {
             sum += weights[i][w] * input[w];
         }
 
@@ -124,7 +125,8 @@ std::vector<int16_t> LinearLayer::feedForward(const std::vector<int16_t>& input)
     return outputs;
 }
 
-std::vector<int16_t> LinearLayer::backPropagate(const std::vector<int16_t>& grad) {
+std::vector<int16_t>
+LinearLayer::backPropagate(const std::vector<int16_t>& grad) {
     assert(grad.size() == output_dims);
 
     std::vector<int16_t> prev_layer_grad;
@@ -151,10 +153,8 @@ std::vector<int16_t> LinearLayer::backPropagate(const std::vector<int16_t>& grad
 }
 
 std::vector<int16_t> NNue::linear(
-                                    const LinearLayer&          layer,
-                                          std::vector<int16_t>& output,
-                                    const std::vector<int16_t>&  input
-                                ) const {
+    const LinearLayer& layer, std::vector<int16_t>& output,
+    const std::vector<int16_t>& input) const {
 
     for (int i = 0; i < layer.get_num_outputs(); i++) {
         output[i] = layer.getBias()[i];
@@ -181,7 +181,8 @@ float log_approx(float x) {
 
     float x1 = x - 1.0f;
     float x2 = x1 * x1;
-    float result = ln_coeffs[0] + ln_coeffs[1] * x1 + ln_coeffs[2] * x2 + ln_coeffs[3] * x2 * x1;
+    float result = ln_coeffs[0] + ln_coeffs[1] * x1 + ln_coeffs[2] * x2 +
+ln_coeffs[3] * x2 * x1;
 
     return result;
 }
@@ -196,10 +197,9 @@ float log2_weight_scale(int32_t input, float scale) {
 }
 
 
-int64x2_t _128_haddx2(int64_t sum0, int64_t sum1, int64_t sum2, int64_t sum3, int64x2_t bias) {
-    int64_t sum0123 = vadd_s64(sum0, sum1);
-    int64_t sum2345 = vadd_s64(sum2, sum3);
-    int64x2_t sum = vadd_s64(sum0123, sum2345);
+int64x2_t _128_haddx2(int64_t sum0, int64_t sum1, int64_t sum2, int64_t sum3,
+int64x2_t bias) { int64_t sum0123 = vadd_s64(sum0, sum1); int64_t sum2345 =
+vadd_s64(sum2, sum3); int64x2_t sum = vadd_s64(sum0123, sum2345);
 
     return vadd_s64(sum, bias);
 }
@@ -228,20 +228,26 @@ std::vector<int16_t> NNue::linear(
         int64_t sum3 = vdup_n_s64(0);
 
         for (int j = 0; j < num_in_subsets; ++j) {
-            int64_t in = vld1_s64(reinterpret_cast<const int64_t*>(&input[j * register_width]));
+            int64_t in = vld1_s64(reinterpret_cast<const int64_t*>(&input[j *
+register_width]));
 
-            sum0 = vmlal_s8(sum0, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
-            sum1 = vmlal_s8(sum1, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
-            sum2 = vmlal_s8(sum2, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
-            sum3 = vmlal_s8(sum3, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
+            sum0 = vmlal_s8(sum0, vld1_s16(reinterpret_cast<const
+int16_t*>(&layer.getWeights(offset + j * register_width))), in); sum1 =
+vmlal_s8(sum1, vld1_s16(reinterpret_cast<const
+int16_t*>(&layer.getWeights(offset + j * register_width))), in); sum2 =
+vmlal_s8(sum2, vld1_s16(reinterpret_cast<const
+int16_t*>(&layer.getWeights(offset + j * register_width))), in); sum3 =
+vmlal_s8(sum3, vld1_s16(reinterpret_cast<const
+int16_t*>(&layer.getWeights(offset + j * register_width))), in);
         }
 
-        int32_t bias     = vld1_s32(reinterpret_cast<const int32_t*>(&layer.getBias()[i * 4]));
+        int32_t bias     = vld1_s32(reinterpret_cast<const
+int32_t*>(&layer.getBias()[i * 4]));
 
-        int32x4_t out_0  = vaddq_s32(vpadd_s32(vget_low_s32(sum0), vget_high_s32(sum0)),
-                                    vpadd_s32(vget_low_s32(sum1), vget_high_s32(sum1)));
-        int32x4_t out_1  = vaddq_s32(vpadd_s32(vget_low_s32(sum2), vget_high_s32(sum2)),
-                                    vpadd_s32(vget_low_s32(sum3), vget_high_s32(sum3)));
+        int32x4_t out_0  = vaddq_s32(vpadd_s32(vget_low_s32(sum0),
+vget_high_s32(sum0)), vpadd_s32(vget_low_s32(sum1), vget_high_s32(sum1)));
+        int32x4_t out_1  = vaddq_s32(vpadd_s32(vget_low_s32(sum2),
+vget_high_s32(sum2)), vpadd_s32(vget_low_s32(sum3), vget_high_s32(sum3)));
 
         int32x4_t outval = vaddq_s32(out_0, out_1);
         outval = vaddq_s32(outval, bias);
@@ -257,9 +263,8 @@ std::vector<int16_t> NNue::linear(
 }
 */
 
-
-
-std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t> output, const std::vector<int16_t> input) const {
+std::vector<int16_t> NNue::clipped_relu(
+    std::vector<int16_t> output, const std::vector<int16_t> input) const {
     size_t size = input.size();
 
     for (int i = 0; i < size; i++) {
@@ -269,15 +274,16 @@ std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t> output, const std::
     return output;
 }
 
-float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) const {
-    int color = pos.getSide();
+float NNue::nnue_eval(
+    const Position& pos, NNue::Accumulator<size>& caches) const {
+    int                  color = pos.getSide();
 
     std::vector<int16_t> buffer;
 
-    int16_t input[2 * MAX_INPUT_SIZE];
+    int16_t              input[2 * MAX_INPUT_SIZE];
 
     for (int i = 0; i < MAX_INPUT_SIZE; i++) {
-        input[i] = caches[color][i];
+        input[i]                  = caches[color][i];
         input[MAX_INPUT_SIZE + i] = caches[color ^ 1][i];
     }
 
@@ -290,28 +296,26 @@ float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) cons
 
     std::vector<int16_t> next_output;
 
-    next_output = clipped_relu(current_output, current_input);
-    current_input = current_output;
+    next_output    = clipped_relu(current_output, current_input);
+    current_input  = current_output;
     current_output = next_output;
 
-    next_output = linear(l_1, current_output, current_input);
-    current_input = current_output;
+    next_output    = linear(l_1, current_output, current_input);
+    current_input  = current_output;
     current_output = next_output;
 
-    next_output = clipped_relu(current_output, current_input);
-    current_input = current_output;
+    next_output    = clipped_relu(current_output, current_input);
+    current_input  = current_output;
     current_output = next_output;
 
-    next_output = linear(l_2, current_output, current_input);
+    next_output    = linear(l_2, current_output, current_input);
 
     return current_output[0];
 }
 
-void NNue::refresh_accumulator (
-                                    const LinearLayer&             layer,
-                                    const std::vector<int>&        active_features,
-                                    int                            side
-                                ) {
+void NNue::refresh_accumulator(
+    const LinearLayer& layer, const std::vector<int>& active_features,
+    int side) {
 
     for (int i = 0; i < size; ++i) {
         caches[side][i] = layer.getBias()[i];
@@ -325,11 +329,8 @@ void NNue::refresh_accumulator (
 }
 
 void NNue::update_accumulator(
-                                const LinearLayer&              layer,
-                                const std::vector<int>&         removed_features,
-                                const std::vector<int>&         added_features,
-                                int                             perspective
-                            ) {
+    const LinearLayer& layer, const std::vector<int>& removed_features,
+    const std::vector<int>& added_features, int perspective) {
     NNue::Accumulator<size> new_acc = caches;
     for (int i = 0; i < size; ++i) {
         new_acc[perspective][i] = caches[perspective][i];
@@ -340,7 +341,7 @@ void NNue::update_accumulator(
             new_acc[perspective][i] -= layer.getWeights(r)[i];
         }
     }
-    
+
     for (int a : added_features) {
         for (int i = 0; i < size; ++i) {
             new_acc[perspective][i] += layer.getWeights(a)[i];
@@ -374,10 +375,11 @@ void NNue::update_accumulator(
 
     for (int a : active_features) {
         for (int i = 0; i < subSets_number; i++) {
-            regs[i] = vaddq_s16(regs[i], vld1_s64(&layer.getWeights(a)[i * register_width]));
+            regs[i] = vaddq_s16(regs[i], vld1_s64(&layer.getWeights(a)[i *
+register_width]));
         }
     }
-    
+
     for (int i = 0; i < subSets_number; i++) {
         vst1q_s64(&new_acc[side][i * register_width], regs[i]);
     }
@@ -404,13 +406,15 @@ void update_accumulator (
 
     for (int r : removed_features) {
         for (int j = 0; j < subSets_number; j++) {
-            regs[j] = vsubq_s16(regs[j], vld1_s64(&layer.getWeights(r)[j * register_width]));
+            regs[j] = vsubq_s16(regs[j], vld1_s64(&layer.getWeights(r)[j *
+register_width]));
         }
     }
 
     for (int a : added_features) {
         for (int j = 0; j < subSets_number; j++) {
-            regs[j] = vaddq_s16(regs[j], vld1_s64(&(layer.getWeights(a)[j * register_width])));
+            regs[j] = vaddq_s16(regs[j], vld1_s64(&(layer.getWeights(a)[j *
+register_width])));
         }
     }
 
