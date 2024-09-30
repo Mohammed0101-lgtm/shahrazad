@@ -1,4 +1,4 @@
-# Chess engine
-========================================
-  this repo is still under development 
-========================================
+# Chess engine:
+##  ========================================
+      this repo is still under development 
+##  ========================================
