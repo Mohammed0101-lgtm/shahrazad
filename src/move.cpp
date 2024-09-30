@@ -308,7 +308,7 @@ std::vector<int8_t> knight_moves(const int square, int color, const Position& po
 
             if (our_occupancy.is_bitset(new_pos)) {
                 break;
-			}
+	    }
 
             moves.push_back(new_pos);
         }
