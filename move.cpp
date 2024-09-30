@@ -4,68 +4,72 @@
 #include <cassert>
 #include <unordered_set>
 
+// make a move in a given position
 void do_move(Position& pos, const Move& move) {
+    // data about the given move and position
     unsigned int from   = move.getFrom();
     unsigned int to     = move.getTo();
     unsigned int _flag  = move.getFlags();
     unsigned int _color = pos.getColor(from);
     pieceType    piece  = pos.pieceOn(from);
 
+    // asserts
     assert(from < 64 && from >= 0);
     assert(to < 64 && to >= 0);
     assert(_color == pos.current_side);
 
+    // store the current position as the previous position of the next one after commiting a move
     Position previous_position = pos;
     pos.pieces[from]           = NOPE;
     pos.pieces[to]             = piece;
 
+    // increment the fifty moves counter if the move is quiet
     if (piece == PAWN || move.isCapture())
         pos.fifty_moves_counter = 0;
     else
         pos.fifty_moves_counter++;
 
+    // switch the position's current side
     pos.switch_side();
+    // add the position to the list of played positions
     pos.played_positions.emplace_back(pos.position_key);
+    // increment the stack history
     pos.stacked_his++;
 
+    // update the castle permission if the moved piece is a king
     if (piece == KING) {
         pos.castle_perm[0] = false;
         pos.castle_perm[1] = false;
     }
 
+    // make move on the bitboard of that piece type map
     switch (piece) {
     case KING:
-        _color == WHITE ? pos.white_king.move_bit(from, to)
-                        : pos.black_king.move_bit(from, to);
+        _color == WHITE ? pos.white_king.move_bit(from, to) : pos.black_king.move_bit(from, to);
         break;
     case PAWN:
-        _color == WHITE ? pos.white_pawns.move_bit(from, to)
-                        : pos.black_pawns.move_bit(from, to);
+        _color == WHITE ? pos.white_pawns.move_bit(from, to) : pos.black_pawns.move_bit(from, to);
         break;
     case KNIGHT:
-        _color == WHITE ? pos.white_knights.move_bit(from, to)
-                        : pos.black_knights.move_bit(from, to);
+        _color == WHITE ? pos.white_knights.move_bit(from, to) : pos.black_knights.move_bit(from, to);
         break;
     case BISHOP:
-        _color == WHITE ? pos.white_bishops.move_bit(from, to)
-                        : pos.black_bishops.move_bit(from, to);
+        _color == WHITE ? pos.white_bishops.move_bit(from, to) : pos.black_bishops.move_bit(from, to);
         break;
     case ROOK:
-        _color == WHITE ? pos.white_rooks.move_bit(from, to)
-                        : pos.black_rooks.move_bit(from, to);
+        _color == WHITE ? pos.white_rooks.move_bit(from, to) : pos.black_rooks.move_bit(from, to);
         break;
     case QUEEN:
-        _color == WHITE ? pos.white_queens.move_bit(from, to)
-                        : pos.black_queens.move_bit(from, to);
+        _color == WHITE ? pos.white_queens.move_bit(from, to) : pos.black_queens.move_bit(from, to);
         break;
     default:
         break;
     }
 
+    // update or refresh the NNUE accumalator caches
     for (int perspective : {WHITE, BLACK}) {
         if (pos.needs_refresh[perspective]) {
-            nnue.refresh_accumulator(
-                nnue.l_0, get_active_features(pos, perspective), perspective);
+            nnue.refresh_accumulator(nnue.l_0, get_active_features(pos, perspective), perspective);
         } else {
             nnue.update_accumulator(
                 nnue.l_0, get_removed_features(pos, *pos.prev, perspective),
@@ -74,48 +78,52 @@ void do_move(Position& pos, const Move& move) {
     }
 }
 
-std::vector<int8_t>
-pawn_moves(const int square, int color, const Position& pos) {
+// generate pawn moves
+std::vector<int8_t> pawn_moves(const int square, int color, const Position& pos) {
+    // asserts
     assert(square < 64 && square >= 0);
     assert(pos.pieceOn(square) == PAWN);
 
     std::vector<int8_t> moves;
 
-    Bitboard            our_occupancy =
-        color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy =
-        color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
+    // get the occupancy of the current side and the opponent's side
+    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
+    // if the requested square actualy has a pawn on it
     if (our_occupancy.is_bitset(square)) {
-        int left  = square + 7;
-        int up    = square + 9;
+        // diagonal left pos
+        int left = square + 7;
+        // forward pos
+        int up = square + 9;
+        // diagonal right pos
         int right = square + 9;
 
+        // check occupancies then push back the move to 'moves'
         if (left % 8 != 0 && opp_occupancy.is_bitset(left))
             moves.push_back(left);
 
         if (left % 8 != 7 && opp_occupancy.is_bitset(right))
             moves.push_back(right);
 
-        if (up < 64 && !our_occupancy.is_bitset(up) &&
-            !opp_occupancy.is_bitset(up))
+        if (up < 64 && !our_occupancy.is_bitset(up) && !opp_occupancy.is_bitset(up))
             moves.push_back(right);
     }
 
     return moves;
 }
 
-std::vector<int8_t>
-rook_moves(const int square, int color, const Position& pos) {
+// generate rook moves
+std::vector<int8_t> rook_moves(const int square, int color, const Position& pos) {
     assert(square < 64 && square >= 0);
 
     std::vector<int8_t> moves;
 
-    Bitboard            our_occupancy =
-        color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy =
-        color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
+    // get occupancies
+    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
+    // generate forward moves
     for (int up = square + 8; up < 64; up += 8) {
         if (our_occupancy.is_bitset(up))
             break;
@@ -128,6 +136,7 @@ rook_moves(const int square, int color, const Position& pos) {
         moves.push_back(up);
     }
 
+    // generate backward moves
     for (int down = square - 8; down >= 0; down -= 8) {
         if (our_occupancy.is_bitset(down))
             break;
@@ -140,6 +149,7 @@ rook_moves(const int square, int color, const Position& pos) {
         moves.push_back(down);
     }
 
+    // generate moves to the left
     for (int left = square - 1; left >= 0 && (left + 1) % 8 != 0; left--) {
         if (our_occupancy.is_bitset(left))
             break;
@@ -152,6 +162,7 @@ rook_moves(const int square, int color, const Position& pos) {
         moves.push_back(left);
     }
 
+    // generate moves to the right
     for (int right = square + 1; right < 64 && right % 8 != 0; right++) {
         if (our_occupancy.is_bitset(right))
             break;
@@ -167,19 +178,18 @@ rook_moves(const int square, int color, const Position& pos) {
     return moves;
 }
 
-std::vector<int8_t>
-bishop_moves(const int square, int color, const Position& pos) {
+// generate bishop moves
+std::vector<int8_t> bishop_moves(const int square, int color, const Position& pos) {
     assert(square < 64 && square >= 0);
 
     std::vector<int8_t> moves;
 
-    Bitboard            our_occupancy =
-        color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy =
-        color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
+    // get occupancies
+    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
-    for (int top_right = square + 9; top_right < 64 && (top_right % 8) != 0;
-         top_right += 9) {
+    // generate moves in the top right side
+    for (int top_right = square + 9; top_right < 64 && (top_right % 8) != 0; top_right += 9) {
         if (our_occupancy.is_bitset(top_right))
             break;
 
@@ -191,8 +201,8 @@ bishop_moves(const int square, int color, const Position& pos) {
         moves.push_back(top_right);
     }
 
-    for (int bottom_left = square - 9;
-         bottom_left >= 0 && ((bottom_left + 1) % 8) != 0; bottom_left -= 9) {
+    // generate moves in the bottom left side
+    for (int bottom_left = square - 9; bottom_left >= 0 && ((bottom_left + 1) % 8) != 0; bottom_left -= 9) {
 
         if (our_occupancy.is_bitset(bottom_left))
             break;
@@ -205,8 +215,8 @@ bishop_moves(const int square, int color, const Position& pos) {
         moves.push_back(bottom_left);
     }
 
-    for (int top_left = square + 7; top_left < 64 && ((top_left + 1) % 8) != 0;
-         top_left += 7) {
+    // generate moves in the top left side
+    for (int top_left = square + 7; top_left < 64 && ((top_left + 1) % 8) != 0; top_left += 7) {
 
         if (our_occupancy.is_bitset(top_left))
             break;
@@ -219,8 +229,8 @@ bishop_moves(const int square, int color, const Position& pos) {
         moves.push_back(top_left);
     }
 
-    for (int bottom_right = square - 7;
-         bottom_right >= 0 && (bottom_right % 8) != 0; bottom_right -= 7) {
+    // generate moves in the bottom right side
+    for (int bottom_right = square - 7; bottom_right >= 0 && (bottom_right % 8) != 0; bottom_right -= 7) {
 
         if (our_occupancy.is_bitset(bottom_right))
             break;
@@ -236,8 +246,10 @@ bishop_moves(const int square, int color, const Position& pos) {
     return moves;
 }
 
-std::vector<int8_t>
-queen_moves(const int square, const int color, const Position& pos) {
+// generate queen moves queen moves are actualy a combination of rook
+// moves and bishop moves, so all that we're doing here is
+// merging both from the previously implemented methods
+std::vector<int8_t> queen_moves(const int square, const int color, const Position& pos) {
     assert(pos.pieceOn(square) == QUEEN);
 
     std::vector<int8_t> moves;
@@ -255,20 +267,19 @@ queen_moves(const int square, const int color, const Position& pos) {
     return moves;
 }
 
-std::vector<int8_t>
-knight_moves(const int square, int color, const Position& pos) {
+// generate knight moves knight moves are tricky to explain to
+// even humans, but we can just use a constanqwdt map relative to the
+//  given piece position and ignore the pieces which we jumped over
+std::vector<int8_t> knight_moves(const int square, int color, const Position& pos) {
     assert(square < 64 && square >= 0);
     assert(pos.pieceOn(square) == KNIGHT);
 
     std::vector<int8_t> moves;
 
-    Bitboard            our_occupancy =
-        color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy =
-        color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
+    Bitboard            our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    Bitboard            opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
-    int knight_moves[8][2] = {{-2, 1}, {-2, -1}, {2, 1}, {2, -1},
-                              {-1, 2}, {-1, -2}, {1, 2}, {1, -2}};
+    int knight_moves[8][2] = {{-2, 1}, {-2, -1}, {2, 1}, {2, -1}, {-1, 2}, {-1, -2}, {1, 2}, {1, -2}};
 
     int start_file         = square % 8;
     int start_rank         = square / 8;
@@ -290,18 +301,19 @@ knight_moves(const int square, int color, const Position& pos) {
     return moves;
 }
 
-std::vector<int8_t>
-king_moves(const int square, int color, const Position& pos) {
+// generate king moves
+std::vector<int8_t> king_moves(const int square, int color, const Position& pos) {
+    // asserts
     assert(square < 64 && square >= 0);
     assert(pos.pieceOn(square) == KING);
 
     std::vector<int8_t> moves;
 
-    Bitboard            our_occupancy =
-        color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy =
-        color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
+    // get occupancies
+    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
+    // moves of 1 square in every direction
     int bottom_right = square - 7;
     int top_left     = square + 7;
     int bottom_left  = square - 9;
@@ -311,6 +323,7 @@ king_moves(const int square, int color, const Position& pos) {
     int left         = square - 1;
     int right        = square + 1;
 
+    // checking boundaries and occupancies for validation
     if (bottom_left >= 0 && ((bottom_left + 1) % 8) != 0)
         moves.push_back(bottom_left);
     if (bottom_right >= 0 && (bottom_right % 8) != 0)
@@ -331,24 +344,30 @@ king_moves(const int square, int color, const Position& pos) {
     return moves;
 }
 
+// generate all the possible pseudo moves of a side in a board
 std::vector<Move> generate_all_moves(const Position& pos, int color) {
     assert(color == WHITE || color == BLACK);
 
-    Bitboard occupancy =
-        color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    // get occupancies
+    Bitboard          occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
 
-    std::vector<Move> total;
+    std::vector<Move> total; // ret container
 
+    // loop for each square on the board
     for (int square = 0; square < 64; square++) {
+        // if there is a piece on that square
         if (occupancy.is_bitset(square)) {
             pieceType piece_type = pos.pieceOn(square);
 
+            // just in case
             if (piece_type == NOPE) {
                 continue;
             }
 
+            // possible destinations container
             std::vector<int8_t> to_squares;
 
+            // we don't know what's the actual piece type and we don't wanna know
             switch (piece_type) {
             case PAWN:
                 to_squares = pawn_moves(square, color, pos);
@@ -373,16 +392,19 @@ std::vector<Move> generate_all_moves(const Position& pos, int color) {
                 break;
             }
 
+            // if no moves have been found for the current piece
             if (to_squares.empty())
                 continue;
 
-            std::vector<Move> moves;
+            std::vector<Move> moves; // temp
 
+            // add the moves to the list
             for (int i = 0, n = to_squares.size(); i < n; i++) {
                 Move m = Move(square, to_squares[i], Quiet);
                 moves.push_back(m);
             }
 
+            // add the list to the return vector
             for (Move m : moves)
                 total.push_back(m);
         }
@@ -391,14 +413,18 @@ std::vector<Move> generate_all_moves(const Position& pos, int color) {
     return total;
 }
 
+// gets the squares on which the given piece type resides
+// useful when we don't know which squares we're dealing with
 std::vector<int> piece_squares(pieceType piece_type, const Position& pos) {
     if (piece_type == NOPE)
         return {};
 
+    // assert a valid piece type
     assert(piece_type <= NOPE && piece_type >= KING);
 
     std::vector<int> ans;
 
+    // look for the piece and get it's square if found
     for (int sq = 0; sq < 64; sq++) {
         if (pos.pieces[sq] == piece_type)
             ans.push_back(sq);
@@ -407,16 +433,21 @@ std::vector<int> piece_squares(pieceType piece_type, const Position& pos) {
     return ans;
 }
 
+// sets a bitboard of the attacked squares in a
+// given position by the opposite color
 void setAttackedSquares(Position& pos) {
+    // position data
     int                        color        = pos.getSide();
     int                        oppent_color = color == WHITE ? BLACK : WHITE;
-    std::unordered_set<int8_t> total_access;
+    std::unordered_set<int8_t> total_access; // ret container
 
+    // lambda kinda function that adds a move to the list of accessed squares
     auto add_moves = [&total_access](const std::vector<int8_t>& moves) {
         for (int8_t move : moves)
             total_access.insert(move);
     };
 
+    // also for each square in the board
     for (const pieceType piece : pos.pieces) {
         std::vector<int> piece_sq = piece_squares(piece, pos);
 
@@ -454,14 +485,14 @@ void setAttackedSquares(Position& pos) {
         }
     }
 
+    // set the bitboard / boolean array
     for (int sq = 0; sq < 64; sq++) {
-        color == WHITE ? pos.attacked_black[sq] =
-                             (total_access.find(sq) != total_access.end())
-                       : pos.attacked_white[sq] =
-                             (total_access.find(sq) != total_access.end());
+        color == WHITE ? pos.attacked_black[sq] = (total_access.find(sq) != total_access.end())
+                       : pos.attacked_white[sq] = (total_access.find(sq) != total_access.end());
     }
 }
 
+// is the given move a capture
 bool is_tactical(const Move& _move) {
     unsigned int _flag = _move.getFlags();
     if (_flag == CAPTURE)
@@ -470,7 +501,9 @@ bool is_tactical(const Move& _move) {
     return false;
 }
 
+// pseudo legality checks inspired by stockfish
 bool isPseudoLegal(const Position& pos, const Move& move) {
+    // data about the position and the given move
     const int    color       = pos.getSide();
     unsigned int from        = move.getFrom();
     unsigned int to          = move.getTo();
@@ -478,41 +511,63 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
     unsigned int _move_color = pos.getColor(from);
     pieceType    moved_piece = pos.pieceOn(from);
     Bitboard     occupancy   = pos.occupancy();
-    Bitboard     our_occ =
-        color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    Bitboard     our_occ     = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
 
+    // asserts
     assert(from < 64 && from >= 0);
     assert(to < 64 && to >= 0);
 
+    // if the destination is occupied by us
     if (our_occ.is_bitset(to) == true)
         return false;
+
+    // no one moves twice
     if (color != _move_color)
         return false;
+
+    // no void moves
     if (pos.pieceOn(from) == NOPE)
         return false;
+
+    // can't move to the same square you're in
     if (from == to)
         return false;
+
+    // can't move a void piece
     if (moved_piece == NOPE)
         return false;
+
+    // can't casle with no king
     if ((_flag == KSCastle || _flag == QSCastle) && moved_piece != KING)
         return false;
+
+    // can't en passant with no pawn
     if (_flag == EN_PASSANT && moved_piece != PAWN)
         return false;
+
+    // the destination sqaure in en passant should always be empty
     if (_flag == EN_PASSANT && pos.pieceOn(to) != NOPE)
         return false;
+
+    // can't capture on an empty square
     if (_flag == Capture && pos.pieceOn(to) == NOPE)
         return false;
+
+    // can't promote with no pawn
     if ((_flag == Promo || _flag == enPassant) && moved_piece != PAWN)
         return false;
 
-    const int NORTH = (color == WHITE) ? -8 : 8;
+    const int NORTH = (color == WHITE) ? -8 : 8; // set north fot simplicity
 
     switch (moved_piece) {
     case PAWN: {
+        // generate all the possible moves
         std::vector<int8_t> moves = pawn_moves(from, color, pos);
+        // the given moves should always exist in this list
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
             return false;
 
+        // additional checks for robustness
         if (_flag == EN_PASSANT) {
             if (color == WHITE && to != (from + NORTH))
                 return false;
@@ -526,15 +581,15 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
             if (color == WHITE ? ranks[to] != 7 : ranks[to] != 1)
                 return false;
         } else {
-            if (color == WHITE && ranks[from] >= 1 && ranks[from] < 6 &&
-                ranks[from] >= ranks[to])
+            if (color == WHITE && ranks[from] >= 1 && ranks[from] < 6 && ranks[from] >= ranks[to])
                 return false;
-            if (color == BLACK && ranks[from] >= 6 && ranks[from] < 1 &&
-                ranks[from] <= ranks[to])
+            if (color == BLACK && ranks[from] >= 6 && ranks[from] < 1 && ranks[from] <= ranks[to])
                 return false;
         }
     } break;
 
+    // almost the same with the rest of the pieces but with some slight
+    // differences based on the move type
     case KNIGHT: {
         std::vector<int8_t> moves = knight_moves(from, color, pos);
 
@@ -569,27 +624,25 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
 
         if (_flag == KSCastle) {
             if (color == WHITE) {
-                if (occupancy.is_bitset(f1) || occupancy.is_bitset(g1) ||
-                    pos.isAttacked(f1, WHITE) || pos.isAttacked(g1, WHITE))
+                if (occupancy.is_bitset(f1) || occupancy.is_bitset(g1) || pos.isAttacked(f1, WHITE) ||
+                    pos.isAttacked(g1, WHITE))
 
                     return false;
             } else {
-                if (occupancy.is_bitset(f8) || occupancy.is_bitset(g8) ||
-                    pos.isAttacked(f8, BLACK) || pos.isAttacked(g8, BLACK))
+                if (occupancy.is_bitset(f8) || occupancy.is_bitset(g8) || pos.isAttacked(f8, BLACK) ||
+                    pos.isAttacked(g8, BLACK))
 
                     return false;
             }
         } else if (_flag == QSCastle) {
             if (color == WHITE) {
-                if (occupancy.is_bitset(d1) || occupancy.is_bitset(c1) ||
-                    occupancy.is_bitset(b1) || pos.isAttacked(d1, WHITE) ||
-                    pos.isAttacked(c1, WHITE) || pos.isAttacked(b1, WHITE))
+                if (occupancy.is_bitset(d1) || occupancy.is_bitset(c1) || occupancy.is_bitset(b1) ||
+                    pos.isAttacked(d1, WHITE) || pos.isAttacked(c1, WHITE) || pos.isAttacked(b1, WHITE))
 
                     return false;
             } else {
-                if (occupancy.is_bitset(d8) || occupancy.is_bitset(c8) ||
-                    occupancy.is_bitset(b8) || pos.isAttacked(d8, BLACK) ||
-                    pos.isAttacked(c8, BLACK) || pos.isAttacked(b8, BLACK))
+                if (occupancy.is_bitset(d8) || occupancy.is_bitset(c8) || occupancy.is_bitset(b8) ||
+                    pos.isAttacked(d8, BLACK) || pos.isAttacked(c8, BLACK) || pos.isAttacked(b8, BLACK))
 
                     return false;
             }
@@ -605,24 +658,27 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
         break;
     }
 
-    return true;
+    return true; // all right
 }
 
+// gets the bitboard of the opponent pieces attacked by the given piece
 Bitboard get_piece_attacks(const Position& pos, int square) {
     pieceType piece = pos.pieceOn(square);
 
     if (piece == NOPE)
         return Bitboard(0ULL);
 
-    int      side = pos.getColor(square);
-    Bitboard occ =
-        side == WHITE ? pos._black_occupancy() : pos._white_occupancy();
+    // typical data
+    int                 side   = pos.getColor(square);
+    Bitboard            occ    = side == WHITE ? pos._black_occupancy() : pos._white_occupancy();
     Bitboard            result = Bitboard(0ULL);
     std::vector<int8_t> moves  = rook_moves(square, side, pos);
 
+    // if no moves for the given piece then return a 0 bitboard
     if (moves.empty())
-        return result;
+        return Bitboard(0ULL);
 
+    // fetch the result in brute force
     for (const int8_t m : moves)
         if (occ.is_bitset(m))
             result.set_bit(m);
@@ -630,17 +686,21 @@ Bitboard get_piece_attacks(const Position& pos, int square) {
     return result;
 }
 
+// is a given move strictly legal
 bool isLegal(const Position& pos, const Move& move) {
+    // metadata
     unsigned int color = pos.getSide();
     unsigned int _flag = move.getFlags();
     unsigned int from  = move.getFrom();
     unsigned int to    = move.getTo();
     pieceType    piece = pos.pieceOn(from);
 
+    // asserts
     assert(color == pos.getColor(from));
     assert(from < 64 && from >= 0);
     assert(to < 64 && to >= 0);
 
+    // all seen before
     if (_flag != Capture && pos.pieceOn(to) != NOPE)
         return false;
 

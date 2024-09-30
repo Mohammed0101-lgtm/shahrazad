@@ -4,16 +4,14 @@
 #include <vector>
 
 Bitboard Position::_black_occupancy() const {
-    Bitboard occ = black_bishops.board() | black_king.board() |
-                   black_knights.board() | black_pawns.board() |
+    Bitboard occ = black_bishops.board() | black_king.board() | black_knights.board() | black_pawns.board() |
                    black_queens.board() | black_rooks.board();
 
     return occ;
 }
 
 Bitboard Position::_white_occupancy() const {
-    Bitboard occ = white_bishops.board() | white_king.board() |
-                   white_knights.board() | white_pawns.board() |
+    Bitboard occ = white_bishops.board() | white_king.board() | white_knights.board() | white_pawns.board() |
                    white_queens.board() | white_rooks.board();
 
     return occ;
@@ -35,9 +33,7 @@ bool Position::isAttacked(int sq, int color) const {
     return color == WHITE ? attacked_white[sq] : attacked_black[sq];
 }
 
-bool Position::canCastle(int castle_side) const {
-    return castle_perm[castle_side];
-}
+bool     Position::canCastle(int castle_side) const { return castle_perm[castle_side]; }
 
 int      Position::getSide() const { return current_side; }
 
@@ -149,15 +145,12 @@ int Position::isPinned(const int sq) const {
     if (pieces[sq] == NOPE)
         return false;
 
-    Bitboard opponent_occupancy =
-        current_side == WHITE ? _black_occupancy() : _white_occupancy();
+    Bitboard opponent_occupancy = current_side == WHITE ? _black_occupancy() : _white_occupancy();
 
-    for (int op_sq = 0; op_sq < 64 && opponent_occupancy.is_bitset(op_sq);
-         op_sq++) {
+    for (int op_sq = 0; op_sq < 64 && opponent_occupancy.is_bitset(op_sq); op_sq++) {
         switch (pieces[op_sq]) {
         case BISHOP: {
-            std::vector<int8_t> moves =
-                bishop_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
+            std::vector<int8_t> moves = bishop_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end()) {
                 return op_sq;
@@ -167,8 +160,7 @@ int Position::isPinned(const int sq) const {
         }
 
         case QUEEN: {
-            std::vector<int8_t> moves =
-                queen_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
+            std::vector<int8_t> moves = queen_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end()) {
                 return op_sq;
@@ -178,8 +170,7 @@ int Position::isPinned(const int sq) const {
         }
 
         case ROOK: {
-            std::vector<int8_t> moves =
-                rook_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
+            std::vector<int8_t> moves = rook_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end()) {
                 return op_sq;

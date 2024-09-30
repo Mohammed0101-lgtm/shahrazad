@@ -1,5 +1,6 @@
 #include "ttable.h"
 
+// hashing func for indexing
 unsigned long long hash(const int16_t pos_key) {
     unsigned long long h   = 5381;
     unsigned long long key = static_cast<unsigned long long>(pos_key);
@@ -9,6 +10,7 @@ unsigned long long hash(const int16_t pos_key) {
     return h;
 }
 
+// get data from entry
 TT_data ttEntry::read() const {
     TT_data d;
 
@@ -22,17 +24,19 @@ TT_data ttEntry::read() const {
     return d;
 }
 
+// save data in entry
 void ttEntry::save(TT_data& d) {
     unsigned long long _hash = hash(static_cast<uint16_t>(data.pos_key));
 
-    data.bound               = int16_t(d.bound);
-    data.depth               = uint8_t(d.depth);
-    data.eval                = int16_t(d.eval);
-    data.move                = uint16_t(d.move);
-    data.pos_key             = uint16_t(d.pos_key);
-    data.value               = int8_t(d.value);
+    data.bound    = int16_t(d.bound);
+    data.depth    = uint8_t(d.depth);
+    data.eval     = int16_t(d.eval);
+    data.move     = uint16_t(d.move);
+    data.pos_key  = uint16_t(d.pos_key);
+    data.value    = int8_t(d.value);
 }
 
+// get entry from table (as in looking around)
 ttEntry* TranspositionTable::probe(const uint64_t key) const {
     int       _hash   = hash(static_cast<int16_t>(key));
     int       index   = _hash % capacity;

@@ -4,15 +4,18 @@
 #include "search.h"
 #include "types.h"
 
+// constants
 constexpr int     BUCKET_SIZE    = 3;
 constexpr size_t  MAX_TABLE_SIZE = 4000;
 constexpr uint8_t MAX_AGE        = 1 << 5;
 constexpr uint8_t AGE_MASK       = MAX_AGE - 1;
 
+// structs
 struct ttEntry;
 struct ttBucket;
 class TranspositionTable;
 
+// the actual data of a single entry 
 struct TT_data {
   public:
     int16_t  eval;
@@ -23,6 +26,7 @@ struct TT_data {
     uint8_t  depth;
 };
 
+// entry in the TT table
 struct ttEntry {
   private:
     TT_data data;
@@ -35,9 +39,10 @@ struct ttEntry {
     void    save(TT_data& d);
 };
 
+// bucket of entries can contain up to BUCKET_SIZE entries
 struct ttBucket {
     ttEntry  entries[BUCKET_SIZE] = {};
-    uint16_t age;
+    uint16_t age; // for replacement decision
 };
 
 class TranspositionTable
@@ -55,9 +60,13 @@ class TranspositionTable
     friend struct ttEntry;
 
     size_t    capacity; // remember to initialize this variable
-    size_t    table_size  = 0;
+    size_t    table_size  = 0; 
     ttBucket* table       = nullptr;
     uint8_t   generations = 0;
 };
+
+// just for the overhead
+static_assert(sizeof(TT_data) == 10);
+static_assert(sizeof(ttEntry) == 32);
 
 #endif // TTABLE_H
