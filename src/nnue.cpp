@@ -7,16 +7,11 @@
 #include <math.h>
 #include <vector>
 
-/*
-====================================================================
-    - defined macros necessary for optimised implementation -
-====================================================================
-
 #define __builtin_neon_vld1_v
 #define __builtin_neon_vld1q_v
 #define __builtin_neon_vst1_v
 #define __builtin_neon_vst1q_v
-*/
+
 
 int feature_key(int king_square, pieceType piece_type, int square, int color) {
     int p_idx = piece_type * 2 + color;
