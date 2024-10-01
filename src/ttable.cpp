@@ -2,10 +2,10 @@
 
 
 // hashing func for indexing
-unsigned long long hash(const int16_t pos_key) {
-    unsigned long long h   = 5381;
-    unsigned long long key = static_cast<unsigned long long>(pos_key);
-    h                      = ((h << 5) + h) + key;
+uint64_t hash(const int16_t pos_key) {
+    uint64_t h   = 5381;
+    uint64_t key = static_cast<uint64_t>(pos_key);
+    h            = ((h << 5) + h) + key;
     return h;
 }
 
