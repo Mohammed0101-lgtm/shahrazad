@@ -1,2 +1,2 @@
-# Chess engine:
+# Sahrazad Chess engine:
 this repo is still under development 
