@@ -1,6 +1,7 @@
 #include "move.h"
 #include "nnue.h"
 #include "position.h"
+
 #include <cassert>
 #include <unordered_set>
 
@@ -340,6 +341,7 @@ std::vector<int8_t> king_moves(const int square, int color, const Position& pos)
     int right        = square + 1;
 
     // checking boundaries and occupancies for validation
+
     if (bottom_left >= 0 && ((bottom_left + 1) % 8) != 0) {
         moves.push_back(bottom_left);
     }
@@ -553,12 +555,12 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
 
     // asserts
     assert(from < 64 && from >= 0);
-    assert(to < 64 && to >= 0);
+    assert(to   < 64 && to   >= 0);
 
     // if the destination is occupied by us
     if (our_occ.is_bitset(to) == true) {
-        return false;
-    }
+        return false; 
+	}
 
     // no one moves twice
     if (color != _move_color) {

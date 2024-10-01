@@ -4,6 +4,7 @@
 #include "search.h"
 #include "types.h"
 
+
 // constants
 constexpr int     BUCKET_SIZE    = 3;
 constexpr size_t  MAX_TABLE_SIZE = 4000;
@@ -15,7 +16,7 @@ struct ttEntry;
 struct ttBucket;
 class TranspositionTable;
 
-// the actual data of a single entry 
+// the actual data of a single entry
 struct TT_data {
   public:
     int16_t  eval;
@@ -24,6 +25,17 @@ struct TT_data {
     int8_t   value;
     uint16_t pos_key;
     uint8_t  depth;
+
+    TT_data() {};
+
+    TT_data(int16_t eval, int16_t bound, uint16_t move, int8_t value, uint16_t pos_key, uint8_t depth) {
+        this->eval    = eval;
+        this->bound   = bound;
+        this->move    = move;
+        this->value   = value;
+        this->pos_key = pos_key;
+        this->depth   = depth;
+    }
 };
 
 // entry in the TT table
@@ -56,11 +68,13 @@ class TranspositionTable
 
     ttEntry* probe(const uint64_t key) const;
 
+    void     save_entry(const ttEntry* entry);
+
   private:
     friend struct ttEntry;
 
     size_t    capacity; // remember to initialize this variable
-    size_t    table_size  = 0; 
+    size_t    table_size  = 0;
     ttBucket* table       = nullptr;
     uint8_t   generations = 0;
 };

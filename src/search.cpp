@@ -12,12 +12,10 @@
 
 template <bool pvNode> int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss);
 
-TranspositionTable tt;
-const int          ageMask = 0b11111000;
+TranspositionTable         tt;
+const int                  ageMask = 0b11111000;
 
-uint8_t ttAge(uint8_t ageBoundPV) { 
-    return (ageBoundPV & ageMask) >> 3; 
-}
+uint8_t                    ttAge(uint8_t ageBoundPV) { return (ageBoundPV & ageMask) >> 3; }
 
 // just another hashing function
 uint64_t hash(const uint64_t key) {
@@ -108,13 +106,9 @@ bool isMaterialDraw(const Position& pos) {
     return false;
 }
 
-bool isFiftyMovesDraw(const Position& pos) {
-    return true;
-}
+bool isFiftyMovesDraw(const Position& pos) { return true; }
 
-bool isDraw(const Position& pos) { 
-    return isRepetition(pos) || isFiftyMovesDraw(pos) || isMaterialDraw(pos); 
-}
+bool isDraw(const Position& pos) { return isRepetition(pos) || isFiftyMovesDraw(pos) || isMaterialDraw(pos); }
 
 uint8_t pack(uint8_t bound, bool wasPv, uint8_t age) {
     return static_cast<uint8_t>(bound + (wasPv << 2) + (age << 3));
@@ -124,20 +118,16 @@ int get_history_score(const Position& pos, SearchData* search_data, const Move& 
     return 1;
 }
 
-void update_corrHistScore(const Position* pos, SearchData* search_data, int depth, int score) {
-    return;
-}
+void update_corrHistScore(const Position* pos, SearchData* search_data, int depth, int score) { return; }
 
 void update_histories(
     const Position* pos, SearchData* search_data, SearchStack* ss, int depth, const Move& best_move,
     MoveList* quietMoves, MoveList* noisyMoves) {
-    
+
     return;
 }
 
-int get_single_score(SearchStack* ss, Move& move, int offset) {
-    return 1;
-}
+int  get_single_score(SearchStack* ss, Move& move, int offset) { return 1; }
 
 void update_score(SearchStack* ss, Move& move, int bonus, const int offset, const Position& pos) {
     if ((ss - offset)->move.asShort()) {
@@ -146,9 +136,7 @@ void update_score(SearchStack* ss, Move& move, int bonus, const int offset, cons
     }
 }
 
-int history_bonus(int depth) { 
-    return std::min(16 * depth * depth + 32 * depth + 16, 1200); 
-}
+int      history_bonus(int depth) { return std::min(16 * depth * depth + 32 * depth + 16, 1200); }
 
 Bitboard get_piece_by_type(const Position* pos, pieceType piece) {
     switch (piece) {
@@ -253,9 +241,7 @@ bool SEE(const Position pos, Move& move, int thresh_hold) {
     return side != pos.getColor(from);
 }
 
-Move get_best_move(const PvTable* pvTable) { 
-    return pvTable->pvArray[0][0]; 
-}
+Move get_best_move(const PvTable* pvTable) { return pvTable->pvArray[0][0]; }
 
 template <bool pvNode>
 int search(int alpha, int beta, int depth, const bool cutNode, ThreadData* thread_data, SearchStack* ss) {
@@ -348,16 +334,8 @@ int search(int alpha, int beta, int depth, const bool cutNode, ThreadData* threa
         // again you need to adjust the eval
         eval = rawEval;
 
-        TT_data new_data;
-
-        new_data.bound   = NO_BOUND;
-        new_data.pos_key = pos->position_key;
-        new_data.move    = NOMOVE;
-        new_data.eval    = rawEval;
-        new_data.depth   = 0;
-        new_data.value   = SCORE_NONE;
-
-        tt_entry->save(new_data);
+        TT_data new_data(rawEval, NO_BOUND, NOMOVE, SCORE_NONE, pos->position_key, 0);
+        tt.save_entry(tt_entry->save(new_data));
     }
 
     if (inCheck) {
@@ -611,15 +589,9 @@ int search(int alpha, int beta, int depth, const bool cutNode, ThreadData* threa
             update_corrHistScore(pos, search_data, depth, bestScore - ss->staticEval);
         }
 
-        TT_data new_data;
-
-        new_data.bound   = bound;
-        new_data.depth   = depth;
-        new_data.eval    = rawEval;
-        new_data.pos_key = pos->position_key;
-        new_data.move    = best_move.asShort();
-
-        tt_entry->save(new_data);
+        TT_data new_data(
+            rawEval, bound, best_move.asShort(), /*this needs to change*/ 0, pos->position_key, depth);
+        tt.save_entry(tt_entry->save(new_data));
     }
 
     return bestScore;
@@ -674,16 +646,8 @@ template <bool pvNode> int Quiescence(int alpha, int beta, ThreadData* thread_da
         rawEval    = network_eval(*pos, nnue, pos.accumulator);
         best_score = ss->staticEval = adjustEvalWithCorrHist(pos, search_data, rawEval);
 
-        TT_data new_data;
-
-        new_data.pos_key = pos->position_key;
-        new_data.move    = NOMOVE;
-        new_data.value   = SCORE_NONE;
-        new_data.eval    = rawEval;
-        new_data.bound   = NO_BOUND;
-        new_data.depth   = 0;
-
-        tt_entry->save(new_data);
+        TT_data new_data(rawEval, NO_BOUND, NOMOVE, SCORE_NONE, pos->position_key, 0);
+        tt.save_entry(tt_entry->save(new_data));
     }
 
     if (best_score >= beta) {
@@ -755,16 +719,8 @@ template <bool pvNode> int Quiescence(int alpha, int beta, ThreadData* thread_da
 
     int     bound = best_score >= beta ? LOWER : UPPER;
 
-    TT_data new_data;
-
-    new_data.pos_key = pos->position_key;
-    new_data.bound   = bound;
-    new_data.depth   = 0;
-    new_data.eval    = rawEval;
-    new_data.move    = best_move.asShort();
-    new_data.value   = best_score;
-
-    tt_entry->save(new_data);
+    TT_data new_data(rawEval, bound, best_move.asShort(), best_score, pos->position_key, 0);
+    tt.save_entry(tt_entry->save(new_data));
 
     return best_score;
 }

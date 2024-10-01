@@ -1,40 +1,21 @@
 #include "ttable.h"
 
+
 // hashing func for indexing
 unsigned long long hash(const int16_t pos_key) {
     unsigned long long h   = 5381;
     unsigned long long key = static_cast<unsigned long long>(pos_key);
-
     h                      = ((h << 5) + h) + key;
-
     return h;
 }
 
 // get data from entry
 TT_data ttEntry::read() const {
-    TT_data d;
-
-    d.bound   = data.bound;
-    d.depth   = data.depth;
-    d.eval    = data.eval;
-    d.move    = data.eval;
-    d.pos_key = data.pos_key;
-    d.value   = data.value;
-
-    return d;
+    return TT_data(data.eval, data.bound, data.move, data.value, data.pos_key, data.depth);
 }
 
 // save data in entry
-void ttEntry::save(TT_data& d) {
-    unsigned long long _hash = hash(static_cast<uint16_t>(data.pos_key));
-
-    data.bound    = int16_t(d.bound);
-    data.depth    = uint8_t(d.depth);
-    data.eval     = int16_t(d.eval);
-    data.move     = uint16_t(d.move);
-    data.pos_key  = uint16_t(d.pos_key);
-    data.value    = int8_t(d.value);
-}
+void ttEntry::save(TT_data& d) { data = TT_data(d); }
 
 // get entry from table (as in looking around)
 ttEntry* TranspositionTable::probe(const uint64_t key) const {
@@ -49,4 +30,13 @@ ttEntry* TranspositionTable::probe(const uint64_t key) const {
     }
 
     return nullptr;
+}
+
+void TranspositionTable::save_entry(const ttEntry* entry) {
+    int       _hash   = hash(static_cast<int16_t>(entry->read().pos_key));
+    ttBucket* cluster = &table[_hash % capacity];
+    // We have to do some checking for the entry age to decide the replacement
+    if (cluster) {
+        cluster->entries[0] = *entry;
+    }
 }
