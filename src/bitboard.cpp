@@ -36,19 +36,6 @@ int Bitboard::square() const {
     return -1;
 }
 
-void Bitboard::_repr_fen_(const std::string& fen_pos) {
-    int pos = 0;
-
-    for (int i = 0; i < 64; i++) {
-        if (fen_pos == board_pos[i]) {
-            pos = i;
-            break;
-        }
-    }
-
-    flip_bit(pos);
-}
-
 void Bitboard::print() const {
     for (int i = 0; i < 64; i++) {
         if (is_bitset(i)) {

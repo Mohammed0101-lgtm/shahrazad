@@ -87,7 +87,7 @@ class Move
 
     constexpr explicit    operator bool() const { return m_Move != 0; }
 
-    constexpr uint16_t    asShort() const { return static_cast<uint16_t>(m_Move); }
+    constexpr uint16_t    data() const { return static_cast<uint16_t>(m_Move); }
 };
 
 // encode sides

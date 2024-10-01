@@ -1,4 +1,4 @@
-#define __SEARCH_CPP__
+// search.cpp
 
 #include "search.h"
 #include "eval.h"
@@ -130,7 +130,7 @@ void update_histories(
 int  get_single_score(SearchStack* ss, Move& move, int offset) { return 1; }
 
 void update_score(SearchStack* ss, Move& move, int bonus, const int offset, const Position& pos) {
-    if ((ss - offset)->move.asShort()) {
+    if ((ss - offset)->move.data()) {
         const int scaledBonus = bonus - get_single_score(ss, move, offset) * std::abs(bonus) / CH_MAX;
         (*((ss - offset)->contHistEntry))[pos.pieceOn(move.getFrom())] += scaledBonus;
     }
@@ -252,7 +252,7 @@ int search(int alpha, int beta, int depth, const bool cutNode, ThreadData* threa
     const bool  inCheck          = pos->inCheck;
     const bool  isRootNode       = (ss->ply == 0);
     const Move  excludedMove     = ss->excludedMove;
-    const short excludedMove_val = excludedMove.asShort();
+    const short excludedMove_val = excludedMove.data();
     int         score            = -MAXSCORE;
     int         eval;
     int         rawEval;
@@ -561,7 +561,7 @@ int search(int alpha, int beta, int depth, const bool cutNode, ThreadData* threa
                         ss->searchKiller = best_move;
 
                         if (ss->ply >= 1) {
-                            search_data->counterMoves[(ss - 1)->move.getFrom()] = move.asShort();
+                            search_data->counterMoves[(ss - 1)->move.getFrom()] = move.data();
                         }
                     }
 
@@ -582,15 +582,15 @@ int search(int alpha, int beta, int depth, const bool cutNode, ThreadData* threa
 
     int bound = bestScore >= beta ? LOWER : alpha != origAlpha ? EXACT : UPPER;
 
-    if (!excludedMove.asShort()) {
-        if (!inCheck && (!best_move.asShort() || !is_tactical(best_move)) &&
+    if (!excludedMove.data()) {
+        if (!inCheck && (!best_move.data() || !is_tactical(best_move)) &&
             !(bound == LOWER && bestScore <= ss->staticEval) &&
             !(bound == UPPER && bestScore >= ss->staticEval)) {
             update_corrHistScore(pos, search_data, depth, bestScore - ss->staticEval);
         }
 
         TT_data new_data(
-            rawEval, bound, best_move.asShort(), /*this needs to change*/ 0, pos->position_key, depth);
+            rawEval, bound, best_move.data(), /*this needs to change*/ 0, pos->position_key, depth);
         tt.save_entry(tt_entry->save(new_data));
     }
 
@@ -698,7 +698,7 @@ template <bool pvNode> int Quiescence(int alpha, int beta, ThreadData* thread_da
             return 0;
         }
 
-        if (score > best_move.asShort()) {
+        if (score > best_move.data()) {
             best_score = score;
 
             if (score > alpha) {
@@ -719,7 +719,7 @@ template <bool pvNode> int Quiescence(int alpha, int beta, ThreadData* thread_da
 
     int     bound = best_score >= beta ? LOWER : UPPER;
 
-    TT_data new_data(rawEval, bound, best_move.asShort(), best_score, pos->position_key, 0);
+    TT_data new_data(rawEval, bound, best_move.data(), best_score, pos->position_key, 0);
     tt.save_entry(tt_entry->save(new_data));
 
     return best_score;

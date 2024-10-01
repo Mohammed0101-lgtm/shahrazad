@@ -26,8 +26,6 @@ class Bitboard
 
     void         move_bit(const int& start_pos, const int& end_pos);
 
-    void         _repr_fen_(const std::string& fen_pos);
-
     void         print() const;
 
     unsigned int count() const;

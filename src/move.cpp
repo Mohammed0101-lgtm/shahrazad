@@ -556,6 +556,11 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
     // asserts
     assert(from < 64 && from >= 0);
     assert(to   < 64 && to   >= 0);
+	
+	// if the move has the valid format
+	if (!move.is_ok()) {
+		return false;
+	}
 
     // if the destination is occupied by us
     if (our_occ.is_bitset(to) == true) {
