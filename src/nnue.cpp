@@ -1,17 +1,28 @@
 #include "nnue.h"
 
 #include "position.h"
+
+#ifdef __APPLE__
 #include <arm_neon.h>
+#endif
+
 #include <cassert>
 #include <cstdint>
 #include <math.h>
 #include <vector>
 
+
+/*
+    This is because I am using an Apple m1 (arm64) macbook pro for this development
+    If any one has the knowledge and time to develop custom gpu/cpu acceleretors for
+    this project it would be great!
+*/
+#ifdef __APPLE__
 #define __builtin_neon_vld1_v
 #define __builtin_neon_vld1q_v
 #define __builtin_neon_vst1_v
 #define __builtin_neon_vst1q_v
-
+#endif
 
 int feature_key(int king_square, pieceType piece_type, int square, int color) {
     int p_idx = piece_type * 2 + color;
@@ -30,6 +41,7 @@ std::vector<int> get_active_features(const Position& pos, int color) {
         int key = feature_key(pos.king_square(color), pos.pieceOn(sq), sq, color);
         active_features.push_back(key);
     }
+
     return active_features;
 }
 
@@ -41,11 +53,11 @@ std::vector<int> get_added_features(const Position& cur_pos, const Position& pre
     std::vector<int> result;
 
     for (int i = 0; i < size; i++) {
-        if (std::find(prev_features.begin(), prev_features.end(), active_features[i]) ==
-            prev_features.end()) {
+        if (std::find(prev_features.begin(), prev_features.end(), active_features[i]) == prev_features.end()) {
             result.push_back(active_features[i]);
         }
     }
+    
     return result;
 }
 
@@ -56,8 +68,7 @@ std::vector<int> get_removed_features(const Position& cur_pos, const Position& p
     std::vector<int> result;
 
     for (int i = 0; i < size; i++) {
-        if (std::find(active_features.begin(), active_features.end(), prev_features[i]) ==
-            prev_features.end()) {
+        if (std::find(active_features.begin(), active_features.end(), prev_features[i]) == prev_features.end()) {
             result.push_back(prev_features[i]);
         }
     }
@@ -139,9 +150,7 @@ std::vector<int16_t> LinearLayer::backPropagate(const std::vector<int16_t>& grad
     return prev_layer_grad;
 }
 
-std::vector<int16_t> NNue::linear(
-    const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int16_t>& input) const {
-
+std::vector<int16_t> NNue::linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int16_t>& input) const {
     for (int i = 0; i < layer.get_num_outputs(); i++) {
         output[i] = layer.getBias()[i];
     }
@@ -155,13 +164,13 @@ std::vector<int16_t> NNue::linear(
     return output;
 }
 
+#ifdef __APPLE__ && __arm64__
 float log_approx(float x) {
-    const float ln_coeffs[] = {
-      0.2402265069591007f, 0.2851821182387283f, 0.4000097213251230f, 0.6666671873348118f};
+    const float ln_coeffs[] = {0.2402265069591007f, 0.2851821182387283f, 0.4000097213251230f, 0.6666671873348118f};
 
-    float x1     = x - 1.0f;
-    float x2     = x1 * x1;
-    float result = ln_coeffs[0] + ln_coeffs[1] * x1 + ln_coeffs[2] * x2 + ln_coeffs[3] * x2 * x1;
+    float       x1          = x - 1.0f;
+    float       x2          = x1 * x1;
+    float       result      = ln_coeffs[0] + ln_coeffs[1] * x1 + ln_coeffs[2] * x2 + ln_coeffs[3] * x2 * x1;
 
     return result;
 }
@@ -175,7 +184,6 @@ float log2_weight_scale(int32_t input, float scale) {
     return log2_scaled_input;
 }
 
-
 int64x2_t _128_haddx2(int64_t sum0, int64_t sum1, int64_t sum2, int64_t sum3, int64x2_t bias) {
     int64_t   sum0123 = vadd_s64(sum0, sum1);
     int64_t   sum2345 = vadd_s64(sum2, sum3);
@@ -184,9 +192,7 @@ int64x2_t _128_haddx2(int64_t sum0, int64_t sum1, int64_t sum2, int64_t sum3, in
     return vadd_s64(sum, bias);
 }
 
-
-std::vector<int16_t>
-NNue::linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int8_t>& input) const {
+std::vector<int16_t> linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int8_t>& input) {
 
     constexpr int register_width = 64 / 8;
 
@@ -207,32 +213,17 @@ NNue::linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::
         for (int j = 0; j < num_in_subsets; ++j) {
             int64_t in = vld1_s64(reinterpret_cast<const int64_t*>(&input[j * register_width]));
 
-            sum0       = vmlal_s8(
-                sum0,
-                vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))),
-                in);
-            sum1 = vmlal_s8(
-                sum1,
-                vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))),
-                in);
-            sum2 = vmlal_s8(
-                sum2,
-                vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))),
-                in);
-            sum3 = vmlal_s8(
-                sum3,
-                vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))),
-                in);
+            // group
+            sum0 = vmlal_s8(sum0, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
+            sum1 = vmlal_s8(sum1, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
+            sum2 = vmlal_s8(sum2, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
+            sum3 = vmlal_s8(sum3, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
         }
 
         int32_t   bias  = vld1_s32(reinterpret_cast<const int32_t*>(&layer.getBias()[i * 4]));
 
-        int32x4_t out_0 = vaddq_s32(
-            vpadd_s32(vget_low_s32(sum0), vget_high_s32(sum0)),
-            vpadd_s32(vget_low_s32(sum1), vget_high_s32(sum1)));
-        int32x4_t out_1 = vaddq_s32(
-            vpadd_s32(vget_low_s32(sum2), vget_high_s32(sum2)),
-            vpadd_s32(vget_low_s32(sum3), vget_high_s32(sum3)));
+        int32x4_t out_0 = vaddq_s32(vpadd_s32(vget_low_s32(sum0), vget_high_s32(sum0)), vpadd_s32(vget_low_s32(sum1), vget_high_s32(sum1)));
+        int32x4_t out_1 = vaddq_s32(vpadd_s32(vget_low_s32(sum2), vget_high_s32(sum2)), vpadd_s32(vget_low_s32(sum3), vget_high_s32(sum3)));
 
         int32x4_t outval = vaddq_s32(out_0, out_1);
         outval           = vaddq_s32(outval, bias);
@@ -246,6 +237,7 @@ NNue::linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::
 
     return output;
 }
+#endif // apple and arm64
 
 std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t> output, const std::vector<int16_t> input) const {
     size_t size = input.size();
@@ -256,6 +248,21 @@ std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t> output, const std::
 
     return output;
 }
+
+#ifdef __APPLE__ && __arm64__
+std::vector<int16_t> clipped_relu(std::vector<int16_t> output, const std::vector<int16_t>& input) {
+    int16x8_t zero = vdupq_n_s16(0);
+    int16x8_t one = vdupq_n_s16(1);
+
+    for (size_t i = 0; i < size; i += 8) {
+        int16x8_t input_vec = vld1q_s16(&input[i]);
+        int16x8_t clipped = vmaxq_s16(zero, vminq_s16(input_vec, one));
+        vst1q_s16(&output[i], clipped);
+    }
+
+    return output;
+}
+#endif // apple and arm64
 
 float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) const {
     int                  color = pos.getSide();
@@ -309,8 +316,7 @@ void NNue::refresh_accumulator(const LinearLayer& layer, const std::vector<int>&
 }
 
 void NNue::update_accumulator(
-    const LinearLayer& layer, const std::vector<int>& removed_features,
-    const std::vector<int>& added_features, int perspective) {
+    const LinearLayer& layer, const std::vector<int>& removed_features, const std::vector<int>& added_features, int perspective) {
     NNue::Accumulator<size> new_acc = caches;
     for (int i = 0; i < size; ++i) {
         new_acc[perspective][i] = caches[perspective][i];
@@ -331,9 +337,8 @@ void NNue::update_accumulator(
     caches = new_acc;
 }
 
-void refresh_accumulator(
-    const LinearLayer& layer, NNue::Accumulator<size>& new_acc, const std::vector<int>& active_features,
-    int side) {
+#ifdef __APPLE__ && __arm64__ 
+void refresh_accumulator(const LinearLayer& layer, NNue::Accumulator<size>& new_acc, const std::vector<int>& active_features, int side) {
     constexpr int register_width = 64 / 16;
     static_assert(size % register_width == 0, "4 elements at a time");
     constexpr int        subSets_number = size / register_width;
@@ -385,3 +390,5 @@ void update_accumulator(
         vst1q_s64(&new_acc[side][i * register_width], regs[i]);
     }
 }
+
+#endif // apple and arm64
