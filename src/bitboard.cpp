@@ -1,25 +1,15 @@
 #include "bitboard.h"
 #include <iostream>
 
-void Bitboard::set_bit(const int& pos) { 
-    bit_board |= (MASK << pos); 
-}
+void     Bitboard::set_bit(const int& pos) { bit_board |= (MASK << pos); }
 
-void Bitboard::flip_bit(const int& pos) { 
-    bit_board ^= (MASK << pos); 
-}
+void     Bitboard::flip_bit(const int& pos) { bit_board ^= (MASK << pos); }
 
-void Bitboard::clear_bit(const int& pos) { 
-    bit_board &= ~(MASK << pos); 
-}
+void     Bitboard::clear_bit(const int& pos) { bit_board &= ~(MASK << pos); }
 
-bool Bitboard::is_bitset(const int& pos) const {
-    return (bit_board & (MASK << pos)) != 0;
-}
+bool     Bitboard::is_bitset(const int& pos) const { return (bit_board & (MASK << pos)) != 0; }
 
-uint64_t Bitboard::board() const { 
-    return bit_board; 
-}
+uint64_t Bitboard::board() const { return bit_board; }
 
 void     Bitboard::move_bit(const int& start_pos, const int& end_pos) {
     clear_bit(start_pos);

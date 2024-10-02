@@ -18,7 +18,7 @@ class TranspositionTable;
 
 // the actual data of a single entry
 struct TT_data {
-  public:
+   public:
     int16_t  eval;
     int16_t  bound;
     uint16_t move;
@@ -28,7 +28,8 @@ struct TT_data {
 
     TT_data() {};
 
-    TT_data(int16_t eval, int16_t bound, uint16_t move, int8_t value, uint16_t pos_key, uint8_t depth) {
+    TT_data(
+      int16_t eval, int16_t bound, uint16_t move, int8_t value, uint16_t pos_key, uint8_t depth) {
         this->eval    = eval;
         this->bound   = bound;
         this->move    = move;
@@ -40,26 +41,25 @@ struct TT_data {
 
 // entry in the TT table
 struct ttEntry {
-  private:
+   private:
     TT_data data;
 
-  public:
+   public:
     friend class TranspositionTable;
 
     TT_data read() const;
 
-    void    save(TT_data& d);
+    void save(TT_data& d);
 };
 
 // bucket of entries can contain up to BUCKET_SIZE entries
 struct ttBucket {
     ttEntry  entries[BUCKET_SIZE] = {};
-    uint16_t age; // for replacement decision
+    uint16_t age;  // for replacement decision
 };
 
-class TranspositionTable
-{
-  public:
+class TranspositionTable {
+   public:
     ~TranspositionTable() {
         // This would only work with posix complient systems
         // otherwise you would need alligned allocation and freeing
@@ -68,12 +68,12 @@ class TranspositionTable
 
     ttEntry* probe(const uint64_t key) const;
 
-    void     save_entry(const ttEntry* entry);
+    void save_entry(const ttEntry* entry);
 
-  private:
+   private:
     friend struct ttEntry;
 
-    size_t    capacity; // remember to initialize this variable
+    size_t    capacity;  // remember to initialize this variable
     size_t    table_size  = 0;
     ttBucket* table       = nullptr;
     uint8_t   generations = 0;
@@ -83,4 +83,4 @@ class TranspositionTable
 static_assert(sizeof(TT_data) == 10);
 static_assert(sizeof(ttEntry) == 32);
 
-#endif // TTABLE_H
+#endif  // TTABLE_H

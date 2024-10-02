@@ -18,8 +18,7 @@ int simple_evaluate(const Position& pos) {
     return eval;
 }
 
-int network_eval(
-    const Position& pos, NNue network, NNue::Accumulator<size>& caches) {
+int network_eval(const Position& pos, NNue network, NNue::Accumulator<size>& caches) {
     assert(!pos.inCheck);
 
     bool use_smallnet = false;

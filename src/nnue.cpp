@@ -3,7 +3,6 @@
 #include "position.h"
 
 #ifdef __APPLE__
-#include <arm_neon.h>
 #endif
 
 #include <cassert>
@@ -17,15 +16,10 @@
     If any one has the knowledge and time to develop custom gpu/cpu acceleretors for
     this project it would be great!
 */
-#ifdef __APPLE__
-#define __builtin_neon_vld1_v
-#define __builtin_neon_vld1q_v
-#define __builtin_neon_vst1_v
-#define __builtin_neon_vst1q_v
-#endif
 
-// Computes a unique key for a feature based on the position of the king, the type of piece, its square, and its color.
-int feature_key(int king_square, pieceType piece_type, int square, int color) {
+// Computes a unique key for a feature based on the position of the king, the type of piece, its square, and
+// its color.
+uint32_t feature_key(uint8_t king_square, pieceType piece_type, uint8_t square, uint8_t color) {
     // Calculate the index for the piece based on its type and color
     int p_idx = piece_type * 2 + color;
 
@@ -35,21 +29,21 @@ int feature_key(int king_square, pieceType piece_type, int square, int color) {
 
 // Retrieves a vector of active feature keys for the given position and color.
 // Features represent active pieces on the board.
-std::vector<int> get_active_features(const Position& pos, int color) {
-    std::vector<int> active_features;
+std::vector<uint32_t> get_active_features(const Position& pos, uint8_t color) {
+    std::vector<uint32_t> active_features;
 
     // Get the occupancy bitboard for the given color (either white or black)
     Bitboard occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
 
     // Loop through all squares on the board (64 squares)
-    for (int sq = 0; sq < 64; sq++) {
+    for (uint8_t sq = 0; sq < 64; sq++) {
         // Skip if no piece is present on the current square
         if (!occupancy.is_bitset(sq)) {
             continue;
         }
 
         // Generate the feature key for the piece on the current square
-        int key = feature_key(pos.king_square(color), pos.pieceOn(sq), sq, color);
+        uint32_t key = feature_key(pos.king_square(color), pos.pieceOn(sq), sq, color);
         active_features.push_back(key);
     }
 
@@ -59,13 +53,13 @@ std::vector<int> get_active_features(const Position& pos, int color) {
 
 // Retrieves a list of added features between the current and previous positions for a given color.
 // These are features that exist in the current position but were not present in the previous one.
-std::vector<int> get_added_features(const Position& cur_pos, const Position& prev_pos, int color) {
+std::vector<uint32_t> get_added_features(const Position& cur_pos, const Position& prev_pos, uint8_t color) {
     // Get the active features in the current and previous positions
-    std::vector<int> active_features = get_active_features(cur_pos, color);
-    std::vector<int> prev_features   = get_active_features(prev_pos, color);
-    const int        size            = active_features.size();
+    std::vector<uint32_t> active_features = get_active_features(cur_pos, color);
+    std::vector<uint32_t> prev_features   = get_active_features(prev_pos, color);
+    const int             size            = active_features.size();
 
-    std::vector<int> result;
+    std::vector<uint32_t> result;
 
     // Find features that exist in the current position but not in the previous position
     for (int i = 0; i < size; i++) {
@@ -80,12 +74,12 @@ std::vector<int> get_added_features(const Position& cur_pos, const Position& pre
 
 // Retrieves a list of removed features between the current and previous positions for a given color.
 // These are features that existed in the previous position but are no longer present in the current one.
-std::vector<int> get_removed_features(const Position& cur_pos, const Position& prev_pos, int color) {
+std::vector<uint32_t> get_removed_features(const Position& cur_pos, const Position& prev_pos, uint8_t color) {
     // Get the active features in the current and previous positions
-    std::vector<int> active_features = get_active_features(cur_pos, color);
-    std::vector<int> prev_features   = get_active_features(prev_pos, color);
-    const int        size            = prev_features.size();
-    std::vector<int> result;
+    std::vector<uint32_t> active_features = get_active_features(cur_pos, color);
+    std::vector<uint32_t> prev_features   = get_active_features(prev_pos, color);
+    const int             size            = prev_features.size();
+    std::vector<uint32_t> result;
 
     // Find features that existed in the previous position but no longer exist in the current one
     for (int i = 0; i < size; i++) {
@@ -102,7 +96,6 @@ std::vector<int> get_removed_features(const Position& cur_pos, const Position& p
 std::vector<int16_t> LinearLayer::getWeights(const int index) const {
     // Ensure that the index is valid
     assert(index >= 0 && index < weights.size());
-
     // Return the weights for the specified index
     return weights[index];
 }
@@ -225,117 +218,7 @@ std::vector<int16_t> NNue::linear(const LinearLayer& layer, std::vector<int16_t>
     return output;
 }
 
-#ifdef __APPLE__&& __arm64__
-// Approximates the natural logarithm of the input 'x' using a polynomial expansion.
-float log_approx(float x) {
-    // Coefficients for the polynomial approximation of ln(x)
-    const float ln_coeffs[] = {0.2402265069591007f, 0.2851821182387283f, 0.4000097213251230f, 0.6666671873348118f};
 
-    // Calculate (x - 1), which is used for the approximation
-    float x1 = x - 1.0f;
-    // Square of (x - 1)
-    float x2 = x1 * x1;
-    // Polynomial approximation: ln(x) ≈ c0 + c1 * (x - 1) + c2 * (x - 1)^2 + c3 * (x - 1)^3
-    float result = ln_coeffs[0] + ln_coeffs[1] * x1 + ln_coeffs[2] * x2 + ln_coeffs[3] * x2 * x1;
-
-    // Return the approximated logarithm value
-    return result;
-}
-
-// Computes the base-2 logarithm of 'input' scaled by 'scale'.
-// Uses the log_approx function for natural logarithm approximation and converts it to log2.
-float log2_weight_scale(int32_t input, float scale) {
-    // Convert input integer to float
-    float input_float = (float)input;
-    // Scale the input value by the provided scale factor
-    float scaled_input = input_float * scale;
-    // Approximate the natural logarithm of the scaled input
-    float ln_scaled_input = log_approx(scaled_input);
-    // Convert natural logarithm to base-2 logarithm using the constant ln(2) ≈ 1.4427
-    float log2_scaled_input = ln_scaled_input * 1.4426950408889634f;
-
-    // Return the base-2 logarithm of the scaled input
-    return log2_scaled_input;
-}
-
-// Horizontally adds the sum of four 64-bit integers (sum0, sum1, sum2, sum3) and adds the bias.
-// This function is likely using NEON intrinsics to vectorize the addition.
-int64x2_t _128_haddx2(int64_t sum0, int64_t sum1, int64_t sum2, int64_t sum3, int64x2_t bias) {
-    // Add sum0 and sum1 to get the first intermediate sum
-    int64_t sum0123 = vadd_s64(sum0, sum1);
-    // Add sum2 and sum3 to get the second intermediate sum
-    int64_t sum2345 = vadd_s64(sum2, sum3);
-    // Add both intermediate sums together to combine all four values
-    int64x2_t sum = vadd_s64(sum0123, sum2345);
-
-    // Add the bias to the final sum and return the result
-    return vadd_s64(sum, bias);
-}
-
-std::vector<int16_t> linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int8_t>& input) {
-
-    // Define the width of a SIMD register (64 bits) in terms of bytes (8 bytes = 64 bits)
-    constexpr int register_width = 64 / 8;
-
-    // Ensure that the number of inputs and outputs are divisible by register width and 4, respectively
-    assert(layer.get_num_inputs() % register_width == 0);
-    assert(layer.get_num_outputs() % 4 == 0);
-
-    // Calculate the number of input subsets to be processed in each loop iteration
-    const int num_in_subsets = layer.get_num_inputs() / register_width;
-    // Calculate the number of output subsets to be processed in each loop iteration
-    const int num_out_subsets = layer.get_num_outputs() / 4;
-
-    // Loop through each output subset (processing 4 outputs at a time)
-    for (int i = 0; i < num_out_subsets; ++i) {
-        // Calculate the offset in the weight matrix for the current output subset
-        const int offset = i * 4 * layer.get_num_inputs();
-
-        // Initialize 64-bit accumulators for summing input-weight products (4 output neurons)
-        int64_t sum0 = vdup_n_s64(0); // Accumulator for first output neuron
-        int64_t sum1 = vdup_n_s64(0); // Accumulator for second output neuron
-        int64_t sum2 = vdup_n_s64(0); // Accumulator for third output neuron
-        int64_t sum3 = vdup_n_s64(0); // Accumulator for fourth output neuron
-
-        // Loop through each input subset (processing register_width elements at a time)
-        for (int j = 0; j < num_in_subsets; ++j) {
-            // Load a chunk of input data (register width) into a 64-bit vector register
-            int64_t in = vld1_s64(reinterpret_cast<const int64_t*>(&input[j * register_width]));
-
-            // Multiply-accumulate input data with corresponding weights for each output neuron
-            sum0 = vmlal_s8(sum0, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
-            sum1 = vmlal_s8(sum1, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
-            sum2 = vmlal_s8(sum2, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
-            sum3 = vmlal_s8(sum3, vld1_s16(reinterpret_cast<const int16_t*>(&layer.getWeights(offset + j * register_width))), in);
-        }
-
-        // Load the bias for the current 4 output neurons
-        int32_t bias = vld1_s32(reinterpret_cast<const int32_t*>(&layer.getBias()[i * 4]));
-
-        // Pairwise add and sum accumulators for output neurons 0 and 1
-        int32x4_t out_0 = vaddq_s32(vpadd_s32(vget_low_s32(sum0), vget_high_s32(sum0)), vpadd_s32(vget_low_s32(sum1), vget_high_s32(sum1)));
-        // Pairwise add and sum accumulators for output neurons 2 and 3
-        int32x4_t out_1 = vaddq_s32(vpadd_s32(vget_low_s32(sum2), vget_high_s32(sum2)), vpadd_s32(vget_low_s32(sum3), vget_high_s32(sum3)));
-
-        // Add the partial sums for all four output neurons
-        int32x4_t outval = vaddq_s32(out_0, out_1);
-        // Add the bias to the final output values
-        outval = vaddq_s32(outval, bias);
-
-        // Store the computed output values back to the output vector
-        vst1q_s32(reinterpret_cast<int32_t*>(&output[i * 4]), outval);
-
-        // Further reduce the sums using a helper function (possibly for final summing) and add bias
-        int64x2_t outval = _128_haddx2(sum0, sum1, sum2, sum3, bias);
-
-        // Store the final result in the output vector
-        vst1_s64(&output[i * 4], outval);
-    }
-
-    // Return the computed output vector
-    return output;
-}
-#endif // apple and arm64
 // Applies clipped ReLU to the input: ensures values are between 0 and 1
 std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t> output, const std::vector<int16_t> input) const {
     size_t size = input.size();
@@ -347,24 +230,6 @@ std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t> output, const std::
 
     return output;
 }
-
-#ifdef __APPLE__&& __arm64__
-// Optimized version of clipped ReLU using ARM NEON SIMD instructions for Apple M1 (ARM64)
-std::vector<int16_t> clipped_relu(std::vector<int16_t> output, const std::vector<int16_t>& input) {
-    int16x8_t zero = vdupq_n_s16(0); // Vector of zeros
-    int16x8_t one  = vdupq_n_s16(1); // Vector of ones
-
-    // Process 8 elements at a time using SIMD instructions
-    for (size_t i = 0; i < size; i += 8) {
-        int16x8_t input_vec = vld1q_s16(&input[i]);                       // Load 8 values from input
-        int16x8_t clipped   = vmaxq_s16(zero, vminq_s16(input_vec, one)); // Apply min(1, max(0, input))
-        vst1q_s16(&output[i], clipped);                                   // Store the result
-    }
-
-    return output;
-}
-#endif // apple and arm64
-
 // NNUE evaluation function to compute the score of the position
 float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) const {
     int                  color = pos.getSide(); // Get the side to move
@@ -453,66 +318,3 @@ void NNue::update_accumulator(
     caches = new_acc;
 }
 
-#ifdef __APPLE__&& __arm64__
-// Optimized refresh of accumulator using SIMD instructions for Apple M1
-void refresh_accumulator(const LinearLayer& layer, NNue::Accumulator<size>& new_acc, const std::vector<int>& active_features, int side) {
-    constexpr int register_width = 64 / 16; // Number of elements per SIMD register
-    static_assert(size % register_width == 0, "Size must be divisible by register width");
-    constexpr int        subSets_number = size / register_width; // Number of subsets
-    int16x4_t            regs[subSets_number];                   // SIMD registers
-
-    std::vector<int16_t> biases = layer.getBias();
-
-    // Load biases into SIMD registers
-    for (int i = 0; i < subSets_number; i++) {
-        regs[i] = vld1_s64(&biases[i]);
-    }
-
-    // Add contributions from active features
-    for (int a : active_features) {
-        for (int i = 0; i < subSets_number; i++) {
-            regs[i] = vaddq_s16(regs[i], vld1_s64(&layer.getWeights(a)[i * register_width]));
-        }
-    }
-
-    // Store the results back into the accumulator
-    for (int i = 0; i < subSets_number; i++) {
-        vst1q_s64(&new_acc[side][i * register_width], regs[i]);
-    }
-}
-
-// Optimized update of accumulator using SIMD instructions for Apple M1
-void update_accumulator(
-    const LinearLayer& layer, NNue::Accumulator<size>& new_acc, const NNue::Accumulator<size>& prev_acc,
-    const std::vector<int>& removed_features, const std::vector<int>& added_features, int side) {
-
-    constexpr int register_width = 64 / 16; // Number of elements per SIMD register
-    static_assert(size % register_width == 0, "Size must be divisible by register width");
-    constexpr int subSets_number = size / register_width;
-    int16x4_t     regs[subSets_number]; // SIMD registers
-
-    // Load previous accumulator into SIMD registers
-    for (int i = 0; i < subSets_number; i++) {
-        regs[i] = vld1_s64(&prev_acc[side][i * register_width]);
-    }
-
-    // Subtract weights for removed features
-    for (int r : removed_features) {
-        for (int j = 0; j < subSets_number; j++) {
-            regs[j] = vsubq_s16(regs[j], vld1_s64(&layer.getWeights(r)[j * register_width]));
-        }
-    }
-
-    // Add weights for new added features
-    for (int a : added_features) {
-        for (int j = 0; j < subSets_number; j++) {
-            regs[j] = vaddq_s16(regs[j], vld1_s64(&(layer.getWeights(a)[j * register_width])));
-        }
-    }
-
-    // Store the updated results back into the accumulator
-    for (int i = 0; i < subSets_number; i++) {
-        vst1q_s64(&new_acc[side][i * register_width], regs[i]);
-    }
-}
-#endif // apple and arm64
