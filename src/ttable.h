@@ -40,7 +40,7 @@ struct TT_data {
 
 // entry in the TT table
 struct ttEntry {
-  private:
+  protected:
     TT_data data;
 
   public:
@@ -70,7 +70,7 @@ class TranspositionTable
 
     void     save_entry(const ttEntry* entry);
 
-  private:
+  protected:
     friend struct ttEntry;
 
     size_t    capacity; // remember to initialize this variable

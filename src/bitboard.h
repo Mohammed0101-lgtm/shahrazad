@@ -5,7 +5,7 @@
 
 class Bitboard
 {
-  private:
+  protected:
     uint64_t bit_board;
 
   public:
