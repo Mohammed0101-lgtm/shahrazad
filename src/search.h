@@ -18,9 +18,7 @@ constexpr int                 CH_MAX        = 16384;
 
 // time spent by the thread (Life is short)
 inline uint64_t GetTimeMs() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
-      .count();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 // keep data about the current thread
@@ -91,13 +89,12 @@ bool NodesOver(const SearchInfo* info) { return info->nodeset && info->nodes > i
 
 // thread ran out of time
 bool TimeOver(const SearchInfo* info) {
-    return NodesOver(info)
-        || ((info->timeset || info->movetimeset) && ((info->nodes & 1023) == 1023)
-            && GetTimeMs() > info->stoptimeMax);
+    return NodesOver(info) || ((info->timeset || info->movetimeset) && ((info->nodes & 1023) == 1023) && GetTimeMs() > info->stoptimeMax);
 }
 
 // searching or just chilling
-enum state {
+enum state
+{
     idle,
     search_state
 };
@@ -127,6 +124,7 @@ inline void thread_interrupt() {
     threads.clear();
 }
 
-/*-- note that yes these thread things should be in a seperate file but i did put them here temporarily to solve a circle include problem --*/
+/*-- note that yes these thread things should be in a seperate file but i did put them here temporarily to solve a circle include problem
+ * --*/
 
-#endif  // SEARCH_H
+#endif // SEARCH_H

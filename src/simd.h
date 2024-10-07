@@ -82,10 +82,8 @@ std::vector<int16_t> linear(const LinearLayer& layer, std::vector<int16_t>& outp
         for (int j = 0; j < num_input_subsets; ++j) {
             // Load input data into a 128-bit vector register
             int8x16_t in = vld1q_s8(&input[j * register_width]);
-
             // Load weights for the current input subset
-            const int16_t* weight_ptr = reinterpret_cast<const int16_t*>(layer.getWeights(offset + j * register_width));
-
+            const int16_t* weight_ptr = layer.getWeights(offset + j * register_width);
             // Multiply-accumulate input data with weights for each output neuron
             sum0 = vmlal_s8(sum0, vget_low_s8(in), vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr)));
             sum1 = vmlal_s8(sum1, vget_low_s8(in), vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + register_width)));
@@ -127,29 +125,32 @@ std::vector<int16_t> clipped_relu(std::vector<int16_t> output, const std::vector
     return output;
 }
 
-// Optimized refresh of accumulator using SIMD instructions for Apple M1
 void refresh_accumulator(const LinearLayer& layer, NNue::Accumulator<size>& new_acc, const std::vector<int>& active_features, int side) {
-    static_assert(size % register_width == 0, "Size must be divisible by register width");
-    constexpr int        subSets_number = size / register_width; // Number of subsets
-    int16x4_t            regs[subSets_number];                   // SIMD registers
+    constexpr int register_width = 8; // Number of 16-bit elements per NEON register (int16x8_t)
+    static_assert(size % register_width == 0, "Size must be divisible by the register width");
 
-    std::vector<int16_t> biases = layer.getBias();
+    constexpr int subSets_number = size / register_width; // Number of subsets
+    int16x8_t     regs[subSets_number];                   // SIMD registers
 
     // Load biases into SIMD registers
-    for (int i = 0; i < subSets_number; i++) {
-        regs[i] = vld1_s64(&biases[i]);
+    const std::vector<int16_t>& biases = layer.getBias();
+    for (int i = 0; i < subSets_number; ++i) {
+        regs[i] = vld1q_s16(&biases[i * register_width]); // Load biases for this subset
     }
 
     // Add contributions from active features
     for (int a : active_features) {
-        for (int i = 0; i < subSets_number; i++) {
-            regs[i] = vaddq_s16(regs[i], vld1_s64(&layer.getWeights(a)[i * register_width]));
+        const int16_t* weights = layer.getWeights(a); // Cache pointer to the weights of the feature
+        for (int i = 0; i < subSets_number; ++i) {
+            // Load the weights for the current feature and accumulate them
+            int16x8_t weight_vec = vld1q_s16(&weights[i * register_width]);
+            regs[i]              = vaddq_s16(regs[i], weight_vec); // SIMD addition
         }
     }
 
     // Store the results back into the accumulator
-    for (int i = 0; i < subSets_number; i++) {
-        vst1q_s64(&new_acc[side][i * register_width], regs[i]);
+    for (int i = 0; i < subSets_number; ++i) {
+        vst1q_s16(&new_acc[side][i * register_width], regs[i]); // Store the results back
     }
 }
 

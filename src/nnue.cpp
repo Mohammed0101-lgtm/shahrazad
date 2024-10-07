@@ -93,9 +93,9 @@ std::vector<uint32_t> get_removed_features(const Position& cur_pos, const Positi
 }
 
 // Returns the weights for a given index in the linear layer.
-std::vector<int16_t> LinearLayer::getWeights(const int index) const {
+int16_t* LinearLayer::getWeights(const int index) const {
     // Ensure that the index is valid
-    assert(index >= 0 && index < weights.size());
+    assert(index >= 0 && index < weights_dimensions[0]);
     // Return the weights for the specified index
     return weights[index];
 }
@@ -117,17 +117,17 @@ LinearLayer::LinearLayer(int input_size, int output_size, double lr) {
     assert(output_size > 0);
 
     // Set the dimensions and learning rate (eta)
-    output_dims = output_size;
-    input_dims  = input_size;
-    eta         = lr;
+    output_dims           = output_size;
+    input_dims            = input_size;
+    eta                   = lr;
+    weights_dimensions[0] = output_size;
+    weights_dimensions[1] = input_size;
 
     // Initialize the weights and biases randomly for each output neuron
     for (int i = 0; i < output_size; i++) {
-        weights.push_back(std::vector<int16_t>());
-
         // Initialize the weights for each input, including an extra one for bias
         for (int j = 0; j <= input_size; j++) {
-            weights.back().push_back((float)rand() / RAND_MAX);
+            weights[i][j] = (float)rand() / RAND_MAX;
         }
     }
 }
@@ -317,4 +317,3 @@ void NNue::update_accumulator(
     // Update the cache with the new accumulator
     caches = new_acc;
 }
-

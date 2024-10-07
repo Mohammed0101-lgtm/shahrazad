@@ -9,33 +9,31 @@
 
 const size_t size = 768;
 
-int          feature_index(int king_square, int square, int color, pieceType piece_type) {
-    int p_idx = piece_type * 2 + color;
-    return (square + (p_idx + king_square * 10)) * 64;
-}
 
 class LinearLayer
 {
   private:
-    std::vector<std::vector<int16_t>> weights;
-    std::vector<int16_t>              outputs;
-    std::vector<int16_t>              inputs;
-    std::vector<int16_t>              biases;
+    int16_t**            weights;
+    uint32_t             weights_dimensions[2];
 
-    int                               output_dims;
-    int                               input_dims;
-    double                            eta;
+    std::vector<int16_t> outputs;
+    std::vector<int16_t> inputs;
+    std::vector<int16_t> biases;
+
+    int                  output_dims;
+    int                  input_dims;
+    double               eta;
 
   public:
     LinearLayer() {}
 
-    LinearLayer(int input_size, int output_size, double lr);
+    LinearLayer(int input_size, int output_size, double lr = 0.01);
 
     int                  get_num_outputs() const;
 
     int                  get_num_inputs() const;
 
-    std::vector<int16_t> getWeights(const int index) const;
+    int16_t*             getWeights(const int index) const;
 
     std::vector<int16_t> getBias() const;
 
@@ -71,22 +69,26 @@ class NNue
 
     LinearLayer l_2;
 
-    void refresh_accumulator(const LinearLayer& layer, const std::vector<int>& active_features, int side);
+    void        refresh_accumulator(const LinearLayer& layer, const std::vector<int>& active_features, int side);
 
-    void update_accumulator(
-        const LinearLayer& layer, const std::vector<int>& removed_features,
-        const std::vector<int>& added_features, int perspective);
+    void        update_accumulator(
+               const LinearLayer& layer, const std::vector<int>& removed_features, const std::vector<int>& added_features, int perspective);
 
     std::vector<int16_t> clipped_relu(std::vector<int16_t> output, const std::vector<int16_t> input) const;
 
-    std::vector<int16_t>
-    linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int16_t>& input) const;
+    std::vector<int16_t> linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int16_t>& input) const;
 
-    float nnue_eval(const Position& pos_1, NNue::Accumulator<size>& caches) const;
+    float                nnue_eval(const Position& pos_1, NNue::Accumulator<size>& caches) const;
 };
 
 extern NNue                    nnue = NNue();
 extern NNue::Accumulator<size> caches;
+
+// useful methods
+int feature_index(int king_square, int square, int color, pieceType piece_type) {
+    int p_idx = piece_type * 2 + color;
+    return (square + (p_idx + king_square * 10)) * 64;
+}
 
 uint32_t              feature_key(uint8_t king_square, pieceType piece_type, uint8_t square, uint8_t color);
 

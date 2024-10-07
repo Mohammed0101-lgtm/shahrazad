@@ -806,3 +806,7 @@ bool isLegal(const Position& pos, const Move& move) {
 
     return true;
 }
+
+
+
+
