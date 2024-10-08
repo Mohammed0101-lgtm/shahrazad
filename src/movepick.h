@@ -1,12 +1,10 @@
-#ifndef MOVEPICKER_H
-#define MOVEPICKER_H
+#pragma once
 
 #include "move.h"
 #include "search.h"
 
-class Movepicker
-{
-  public:
+class Movepicker {
+   public:
     Position     pos;
     SearchData*  search_data;
     SearchStack* ss;
@@ -22,5 +20,3 @@ class Movepicker
     Move select(Position& pos);
     Move next(const bool skip);
 };
-
-#endif // MOVEPICKER_H

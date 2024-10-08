@@ -1,12 +1,10 @@
-#ifndef MOVE_H
-#define MOVE_H
+#pragma once
 
 #include "bitboard.h"
 #include "position.h"
 #include "types.h"
 
-typedef enum
-{
+typedef enum {
     Quiet,
     KSCastle,
     QSCastle,
@@ -25,18 +23,20 @@ struct MoveList {
     ScoredMove moves[1024];
     int        size = 0;
 
-    void       append(const Move& _move) {
+    void append(const Move& _move) {
         ScoredMove sc_move;
         sc_move.move = _move;
+
         if (sizeof(moves) >= size)
+        {
             return;
+        }
 
         moves[size++] = sc_move;
     }
 };
 
-enum PickerType : uint8_t
-{
+enum PickerType : uint8_t {
     SEARCH,
     QSEARCH
 };
@@ -53,18 +53,16 @@ std::vector<uint8_t> bishop_moves(const uint8_t square, uint8_t color, const Pos
 
 std::vector<uint8_t> queen_moves(const uint8_t square, const uint8_t color, const Position& pos);
 
-std::vector<Move>    generate_all_moves(const Position& pos, uint8_t color);
+std::vector<Move> generate_all_moves(const Position& pos, uint8_t color);
 
 std::vector<uint8_t> piece_squares(pieceType piece_type, const Position& pos);
 
-bool                 isPseudoLegal(const Position& pos, const Move& move);
+bool isPseudoLegal(const Position& pos, const Move& move);
 
-bool                 isLegal(const Position& pos, const Move& move);
+bool isLegal(const Position& pos, const Move& move);
 
-bool                 is_tactical(const Move& _move);
+bool is_tactical(const Move& _move);
 
-void                 setAttackedSquares(Position& pos);
+void setAttackedSquares(Position& pos);
 
-Bitboard             get_piece_attacks(const Position& pos, uint8_t square);
-
-#endif // MOVE_H
+Bitboard get_piece_attacks(const Position& pos, uint8_t square);

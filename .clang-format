@@ -1,54 +1,44 @@
-BasedOnStyle: LLVM
-IndentWidth: 4
-Language: Cpp
-ColumnLimit: 140
-MaxEmptyLinesToKeep: 2
-EmptyLineBeforeAccessModifier: Always
-DerivePointerAlignment: false
-PointerAlignment: Left
-AlignConsecutiveAssignments:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: false
-AlignConsecutiveBitFields:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: false
-AlignConsecutiveDeclarations:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: false
-AlignConsecutiveMacros:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: false
-AlignConsecutiveShortCaseStatements:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: true
-  AlignCaseColons: false
-AlignConsecutiveTableGenBreakingDAGArgColons:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: false
-AlignConsecutiveTableGenCondOperatorColons:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: false
-AlignConsecutiveTableGenDefinitionColons:
-  Enabled: true
-  AcrossEmptyLines: true
-AcrossComments: false
-AlignTrailingComments:
-Kind: Always
-OverEmptyLines: 2
-BraceWrapping:
-  AfterEnum: true
-  AfterStruct: false
-  SplitEmptyFunction: false
-  AfterClass: true
+AccessModifierOffset: -1
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveDeclarations: Consecutive
+AlignEscapedNewlines: DontAlign
+AlignOperands: AlignAfterOperator
+AlignTrailingComments: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BasedOnStyle: WebKit
+BitFieldColonSpacing: After
+BinPackParameters: false
+BreakBeforeBinaryOperators: NonAssignment
 BreakBeforeBraces: Custom
-AlignAfterOpenBracket: AlwaysBreak
-BracedInitializerIndentWidth: 2
-AllowShortEnumsOnASingleLine: true
-
+BraceWrapping:
+  AfterFunction: false 
+  AfterClass: false
+  AfterControlStatement: true
+  BeforeElse: true
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: AfterColon
+BreakStringLiterals: false
+ColumnLimit: 100
+ContinuationIndentWidth: 2
+Cpp11BracedListStyle: true
+IndentGotoLabels: false
+IndentPPDirectives: BeforeHash
+IndentWidth: 4
+MaxEmptyLinesToKeep: 2
+NamespaceIndentation: None
+PackConstructorInitializers: Never
+ReflowComments: false
+SortIncludes: false
+SortUsingDeclarations: false
+SpaceAfterCStyleCast: true
+SpaceAfterTemplateKeyword: false
+SpaceBeforeCaseColon: true
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeInheritanceColon: false
+SpaceInEmptyBlock: false
+SpacesBeforeTrailingComments: 2

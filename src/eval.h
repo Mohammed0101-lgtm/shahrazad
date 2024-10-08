@@ -1,13 +1,12 @@
-#ifndef EVAL_H
-#define EVAL_H
+#pragma once
 
 #include "nnue.h"
 #include "position.h"
 #include <cassert>
 
 int simple_evaluate(const Position& pos) {
-    int color = pos.getSide();
-    int eval  = 0;
+    uint8_t color = pos.getSide();
+    int     eval  = 0;
 
     eval += pos.numberOf(PAWN, color) * PAWN_VAL;
     eval += pos.numberOf(KNIGHT, color) * KNIGHT_VAL;
@@ -25,9 +24,9 @@ int network_eval(const Position& pos, NNue network, NNue::Accumulator<size>& cac
     int  simple_eval  = simple_evaluate(pos);
 
     if (std::abs(simple_eval) > 962)
+    {
         return network.nnue_eval(pos, caches);
+    }
 
     return simple_eval;
 }
-
-#endif // EVAL_H

@@ -1,16 +1,18 @@
+#pragma once
+
 #include "nnue.h"
 #include <cstdint>
 
-#define USE_NEON // remember to remove this
+#define USE_NEON  // remember to remove this
 
 #ifdef USE_NEON
 
-#include <arm_neon.h>
+    #include <arm_neon.h>
 
-#define __builtin_neon_vld1_v
-#define __builtin_neon_vld1q_v
-#define __builtin_neon_vst1_v
-#define __builtin_neon_vst1q_v
+    #define __builtin_neon_vld1_v
+    #define __builtin_neon_vld1q_v
+    #define __builtin_neon_vst1_v
+    #define __builtin_neon_vst1q_v
 
 using InputType  = std::int32_t;
 using OutputType = std::uint8_t;
@@ -21,7 +23,8 @@ constexpr uint8_t register_width = 16;
 // Approximates the natural logarithm of the input 'x' using a polynomial expansion.
 float log_approx(float x) {
     // Coefficients for the polynomial approximation of ln(x)
-    const float ln_coeffs[] = {0.2402265069591007f, 0.2851821182387283f, 0.4000097213251230f, 0.6666671873348118f};
+    const float ln_coeffs[] = {0.2402265069591007f, 0.2851821182387283f, 0.4000097213251230f,
+                               0.6666671873348118f};
     // Calculate (x - 1), which is used for the approximation
     float x1 = x - 1.0f;
     // Square of (x - 1)
@@ -36,7 +39,7 @@ float log_approx(float x) {
 // Uses the log_approx function for natural logarithm approximation and converts it to log2.
 float log2_weight_scale(int32_t input, float scale) {
     // Convert input integer to float
-    float input_float = (float)input;
+    float input_float = (float) input;
     // Scale the input value by the provided scale factor
     float scaled_input = input_float * scale;
     // Approximate the natural logarithm of the scaled input
@@ -60,7 +63,8 @@ int64x2_t _128_haddx2(int64_t sum0, int64_t sum1, int64_t sum2, int64_t sum3, in
     return vadd_s64(sum, bias);
 }
 
-std::vector<int16_t> linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int8_t>& input) {
+std::vector<int16_t>
+linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector<int8_t>& input) {
     // Ensure that the number of inputs and outputs are divisible by register width and 4, respectively
     assert(layer.get_num_inputs() % register_width == 0);
     assert(layer.get_num_outputs() % 4 == 0);
@@ -69,7 +73,8 @@ std::vector<int16_t> linear(const LinearLayer& layer, std::vector<int16_t>& outp
     const int num_output_subsets = layer.get_num_outputs() / 4;
 
     // Loop through each output subset (processing 4 outputs at a time)
-    for (int i = 0; i < num_output_subsets; ++i) {
+    for (int i = 0; i < num_output_subsets; ++i)
+    {
         const int offset = i * 4 * layer.get_num_inputs();
 
         // Initialize 16-bit accumulators for summing input-weight products (for 4 output neurons)
@@ -79,16 +84,23 @@ std::vector<int16_t> linear(const LinearLayer& layer, std::vector<int16_t>& outp
         int16x8_t sum3 = vdupq_n_s16(0);
 
         // Loop through each input subset (processing register_width elements at a time)
-        for (int j = 0; j < num_input_subsets; ++j) {
+        for (int j = 0; j < num_input_subsets; ++j)
+        {
             // Load input data into a 128-bit vector register
             int8x16_t in = vld1q_s8(&input[j * register_width]);
             // Load weights for the current input subset
             const int16_t* weight_ptr = layer.getWeights(offset + j * register_width);
             // Multiply-accumulate input data with weights for each output neuron
-            sum0 = vmlal_s8(sum0, vget_low_s8(in), vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr)));
-            sum1 = vmlal_s8(sum1, vget_low_s8(in), vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + register_width)));
-            sum2 = vmlal_s8(sum2, vget_low_s8(in), vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + 2 * register_width)));
-            sum3 = vmlal_s8(sum3, vget_low_s8(in), vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + 3 * register_width)));
+            sum0 =
+              vmlal_s8(sum0, vget_low_s8(in), vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr)));
+            sum1 = vmlal_s8(sum1, vget_low_s8(in),
+                            vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + register_width)));
+            sum2 =
+              vmlal_s8(sum2, vget_low_s8(in),
+                       vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + 2 * register_width)));
+            sum3 =
+              vmlal_s8(sum3, vget_low_s8(in),
+                       vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + 3 * register_width)));
         }
 
         // Load the bias for the current 4 output neurons
@@ -112,80 +124,99 @@ std::vector<int16_t> linear(const LinearLayer& layer, std::vector<int16_t>& outp
 
 // Optimized version of clipped ReLU using ARM NEON SIMD instructions for Apple M1 (ARM64)
 std::vector<int16_t> clipped_relu(std::vector<int16_t> output, const std::vector<int16_t>& input) {
-    int16x8_t zero = vdupq_n_s16(0); // Vector of zeros
-    int16x8_t one  = vdupq_n_s16(1); // Vector of ones
+    int16x8_t zero = vdupq_n_s16(0);  // Vector of zeros
+    int16x8_t one  = vdupq_n_s16(1);  // Vector of ones
 
     // Process 8 elements at a time using SIMD instructions
-    for (size_t i = 0; i < size; i += 8) {
-        int16x8_t input_vec = vld1q_s16(&input[i]);                       // Load 8 values from input
-        int16x8_t clipped   = vmaxq_s16(zero, vminq_s16(input_vec, one)); // Apply min(1, max(0, input))
-        vst1q_s16(&output[i], clipped);                                   // Store the result
+    for (size_t i = 0; i < size; i += 8)
+    {
+        int16x8_t input_vec = vld1q_s16(&input[i]);  // Load 8 values from input
+        int16x8_t clipped =
+          vmaxq_s16(zero, vminq_s16(input_vec, one));  // Apply min(1, max(0, input))
+        vst1q_s16(&output[i], clipped);                // Store the result
     }
 
     return output;
 }
 
-void refresh_accumulator(const LinearLayer& layer, NNue::Accumulator<size>& new_acc, const std::vector<int>& active_features, int side) {
-    constexpr int register_width = 8; // Number of 16-bit elements per NEON register (int16x8_t)
+void refresh_accumulator(const LinearLayer&       layer,
+                         NNue::Accumulator<size>& new_acc,
+                         const std::vector<int>&  active_features,
+                         int                      side) {
+    constexpr int register_width = 8;  // Number of 16-bit elements per NEON register (int16x8_t)
     static_assert(size % register_width == 0, "Size must be divisible by the register width");
 
-    constexpr int subSets_number = size / register_width; // Number of subsets
-    int16x8_t     regs[subSets_number];                   // SIMD registers
+    constexpr int subSets_number = size / register_width;  // Number of subsets
+    int16x8_t     regs[subSets_number];                    // SIMD registers
 
     // Load biases into SIMD registers
     const std::vector<int16_t>& biases = layer.getBias();
-    for (int i = 0; i < subSets_number; ++i) {
-        regs[i] = vld1q_s16(&biases[i * register_width]); // Load biases for this subset
+    for (int i = 0; i < subSets_number; ++i)
+    {
+        regs[i] = vld1q_s16(&biases[i * register_width]);  // Load biases for this subset
     }
 
     // Add contributions from active features
-    for (int a : active_features) {
-        const int16_t* weights = layer.getWeights(a); // Cache pointer to the weights of the feature
-        for (int i = 0; i < subSets_number; ++i) {
+    for (int a : active_features)
+    {
+        const int16_t* weights =
+          layer.getWeights(a);  // Cache pointer to the weights of the feature
+        for (int i = 0; i < subSets_number; ++i)
+        {
             // Load the weights for the current feature and accumulate them
             int16x8_t weight_vec = vld1q_s16(&weights[i * register_width]);
-            regs[i]              = vaddq_s16(regs[i], weight_vec); // SIMD addition
+            regs[i]              = vaddq_s16(regs[i], weight_vec);  // SIMD addition
         }
     }
 
     // Store the results back into the accumulator
-    for (int i = 0; i < subSets_number; ++i) {
-        vst1q_s16(&new_acc[side][i * register_width], regs[i]); // Store the results back
+    for (int i = 0; i < subSets_number; ++i)
+    {
+        vst1q_s16(&new_acc[side][i * register_width], regs[i]);  // Store the results back
     }
 }
 
 // Optimized update of accumulator using SIMD instructions for Apple M1
-void update_accumulator(
-    const LinearLayer& layer, NNue::Accumulator<size>& new_acc, const NNue::Accumulator<size>& prev_acc,
-    const std::vector<int>& removed_features, const std::vector<int>& added_features, int side) {
+void update_accumulator(const LinearLayer&             layer,
+                        NNue::Accumulator<size>&       new_acc,
+                        const NNue::Accumulator<size>& prev_acc,
+                        const std::vector<int>&        removed_features,
+                        const std::vector<int>&        added_features,
+                        int                            side) {
 
     static_assert(size % register_width == 0, "Size must be divisible by register width");
     constexpr int subSets_number = size / register_width;
-    int16x4_t     regs[subSets_number]; // SIMD registers
+    int16x4_t     regs[subSets_number];  // SIMD registers
 
     // Load previous accumulator into SIMD registers
-    for (int i = 0; i < subSets_number; i++) {
+    for (int i = 0; i < subSets_number; i++)
+    {
         regs[i] = vld1_s64(&prev_acc[side][i * register_width]);
     }
 
     // Subtract weights for removed features
-    for (int r : removed_features) {
-        for (int j = 0; j < subSets_number; j++) {
+    for (int r : removed_features)
+    {
+        for (int j = 0; j < subSets_number; j++)
+        {
             regs[j] = vsubq_s16(regs[j], vld1_s64(&layer.getWeights(r)[j * register_width]));
         }
     }
 
     // Add weights for new added features
-    for (int a : added_features) {
-        for (int j = 0; j < subSets_number; j++) {
+    for (int a : added_features)
+    {
+        for (int j = 0; j < subSets_number; j++)
+        {
             regs[j] = vaddq_s16(regs[j], vld1_s64(&(layer.getWeights(a)[j * register_width])));
         }
     }
 
     // Store the updated results back into the accumulator
-    for (int i = 0; i < subSets_number; i++) {
+    for (int i = 0; i < subSets_number; i++)
+    {
         vst1q_s64(&new_acc[side][i * register_width], regs[i]);
     }
 }
 
-#endif
+#endif  // USE_NEON
