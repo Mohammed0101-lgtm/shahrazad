@@ -3,9 +3,8 @@
 #include "nnue.h"
 #include <cstdint>
 
-#define USE_NEON  // remember to remove this
 
-#ifdef USE_NEON
+#ifdef __ARM_NEON
 
     #include <arm_neon.h>
 
@@ -219,4 +218,4 @@ void update_accumulator(const LinearLayer&             layer,
     }
 }
 
-#endif  // USE_NEON
+#endif  //  __ARM_NEON

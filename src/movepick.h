@@ -15,7 +15,7 @@ class Movepicker {
     int          index;
     int          stage;
 
-    Movepicker() {}
+    Movepicker() = default;
 
     Move select(Position& pos);
     Move next(const bool skip);
