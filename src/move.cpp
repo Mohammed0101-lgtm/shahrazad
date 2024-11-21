@@ -1,7 +1,6 @@
 #include "move.h"
 #include "nnue.h"
 #include "position.h"
-
 #include <cassert>
 #include <unordered_set>
 
@@ -27,13 +26,9 @@ void do_move(Position& pos, const Move& move) {
 
     // increment the fifty moves counter if the move is quiet
     if (piece == PAWN || move.isCapture())
-    {
         pos.fifty_moves_counter = 0;
-    }
     else
-    {
         pos.fifty_moves_counter++;
-    }
 
     // switch the position's current side
     pos.switch_side();
@@ -82,14 +77,10 @@ void do_move(Position& pos, const Move& move) {
     for (uint8_t perspective : pers)
     {
         if (pos.needs_refresh[perspective])
-        {
             nnue.refresh_accumulator(nnue.l_0, get_active_features(pos, perspective), perspective);
-        }
         else
-        {
             nnue.update_accumulator(nnue.l_0, get_removed_features(pos, *pos.prev, perspective),
                                     get_added_features(pos, *pos.prev, perspective), perspective);
-        }
     }
 }
 
@@ -117,19 +108,15 @@ std::vector<uint8_t> pawn_moves(const uint8_t square, uint8_t color, const Posit
 
         // check occupancies then push back the move to 'moves'
         if (left % 8 != 0 && opp_occupancy.is_bitset(left))
-        {
             moves.push_back(left);
-        }
+
 
         if (left % 8 != 7 && opp_occupancy.is_bitset(right))
-        {
             moves.push_back(right);
-        }
+
 
         if (up < 64 && !our_occupancy.is_bitset(up) && !opp_occupancy.is_bitset(up))
-        {
             moves.push_back(right);
-        }
     }
 
     return moves;
@@ -149,9 +136,7 @@ std::vector<uint8_t> rook_moves(const uint8_t square, uint8_t color, const Posit
     for (uint8_t up = square + 8; up < 64; up += 8)
     {
         if (our_occupancy.is_bitset(up))
-        {
             break;
-        }
 
         if (opp_occupancy.is_bitset(up))
         {
@@ -166,9 +151,7 @@ std::vector<uint8_t> rook_moves(const uint8_t square, uint8_t color, const Posit
     for (uint8_t down = square - 8; down >= 0; down -= 8)
     {
         if (our_occupancy.is_bitset(down))
-        {
             break;
-        }
 
         if (opp_occupancy.is_bitset(down))
         {
@@ -183,9 +166,7 @@ std::vector<uint8_t> rook_moves(const uint8_t square, uint8_t color, const Posit
     for (uint8_t left = square - 1; left >= 0 && (left + 1) % 8 != 0; left--)
     {
         if (our_occupancy.is_bitset(left))
-        {
             break;
-        }
 
         if (opp_occupancy.is_bitset(left))
         {
@@ -200,9 +181,7 @@ std::vector<uint8_t> rook_moves(const uint8_t square, uint8_t color, const Posit
     for (uint8_t right = square + 1; right < 64 && right % 8 != 0; right++)
     {
         if (our_occupancy.is_bitset(right))
-        {
             break;
-        }
 
         if (opp_occupancy.is_bitset(right))
         {
@@ -230,9 +209,7 @@ std::vector<uint8_t> bishop_moves(const uint8_t square, uint8_t color, const Pos
     for (uint8_t top_right = square + 9; top_right < 64 && (top_right % 8) != 0; top_right += 9)
     {
         if (our_occupancy.is_bitset(top_right))
-        {
             break;
-        }
 
         if (opp_occupancy.is_bitset(top_right))
         {
@@ -248,9 +225,7 @@ std::vector<uint8_t> bishop_moves(const uint8_t square, uint8_t color, const Pos
          bottom_left -= 9)
     {
         if (our_occupancy.is_bitset(bottom_left))
-        {
             break;
-        }
 
         if (opp_occupancy.is_bitset(bottom_left))
         {
@@ -266,9 +241,7 @@ std::vector<uint8_t> bishop_moves(const uint8_t square, uint8_t color, const Pos
     {
 
         if (our_occupancy.is_bitset(top_left))
-        {
             break;
-        }
 
         if (opp_occupancy.is_bitset(top_left))
         {
@@ -284,9 +257,7 @@ std::vector<uint8_t> bishop_moves(const uint8_t square, uint8_t color, const Pos
          bottom_right -= 7)
     {
         if (our_occupancy.is_bitset(bottom_right))
-        {
             break;
-        }
 
         if (our_occupancy.is_bitset(bottom_right))
         {
@@ -313,14 +284,10 @@ std::vector<uint8_t> queen_moves(const uint8_t square, const uint8_t color, cons
     moves.reserve(b.size() + r.size());
 
     for (uint8_t i = 0, n = b.size(); i < n; i++)
-    {
         moves[i] = b[i];
-    }
 
     for (uint8_t i = b.size(), n = b.size() + r.size(), k = 0; i < n, k < r.size(); i++)
-    {
         moves[i] = r[k++];
-    }
 
     return moves;
 }
@@ -353,9 +320,7 @@ std::vector<uint8_t> knight_moves(const uint8_t square, uint8_t color, const Pos
             int new_pos = new_rank * 8 + new_file;
 
             if (our_occupancy.is_bitset(new_pos))
-            {
                 break;
-            }
 
             moves.push_back(new_pos);
         }
@@ -389,44 +354,28 @@ std::vector<uint8_t> king_moves(const uint8_t square, uint8_t color, const Posit
     // checking boundaries and occupancies for validation
 
     if (bottom_left >= 0 && ((bottom_left + 1) % 8) != 0)
-    {
         moves.push_back(bottom_left);
-    }
 
     if (bottom_right >= 0 && (bottom_right % 8) != 0)
-    {
         moves.push_back(bottom_right);
-    }
 
     if (top_left < 64 && (top_left + 1) % 8 != 0)
-    {
         moves.push_back(top_left);
-    }
 
     if (top_right < 64 && (top_right + 1) % 8 != 0)
-    {
         moves.push_back(top_right);
-    }
 
     if (up < 64)
-    {
         moves.push_back(up);
-    }
 
     if (down >= 0)
-    {
         moves.push_back(down);
-    }
 
     if (left >= 0 && (left + 1) % 8 != 0)
-    {
         moves.push_back(left);
-    }
 
     if (right < 64 && right % 8 != 0)
-    {
         moves.push_back(right);
-    }
 
     return moves;
 }
@@ -450,9 +399,7 @@ std::vector<Move> generate_all_moves(const Position& pos, uint8_t color) {
 
             // just in case
             if (piece_type == NOPE)
-            {
                 continue;
-            }
 
             // possible destinations container
             std::vector<uint8_t> to_squares;
@@ -485,9 +432,7 @@ std::vector<Move> generate_all_moves(const Position& pos, uint8_t color) {
 
             // if no moves have been found for the current piece
             if (to_squares.empty())
-            {
                 continue;
-            }
 
             std::vector<Move> moves;  // temp
 
@@ -500,9 +445,7 @@ std::vector<Move> generate_all_moves(const Position& pos, uint8_t color) {
 
             // add the list to the return vector
             for (Move m : moves)
-            {
                 total.push_back(m);
-            }
         }
     }
 
@@ -513,9 +456,7 @@ std::vector<Move> generate_all_moves(const Position& pos, uint8_t color) {
 // useful when we don't know which squares we're dealing with
 std::vector<uint8_t> piece_squares(pieceType piece_type, const Position& pos) {
     if (piece_type == NOPE)
-    {
         return {};
-    }
 
     // assert a valid piece type
     assert(piece_type <= NOPE && piece_type >= KING);
@@ -526,9 +467,7 @@ std::vector<uint8_t> piece_squares(pieceType piece_type, const Position& pos) {
     for (uint8_t sq = 0; sq < 64; sq++)
     {
         if (pos.pieces[sq] == piece_type)
-        {
             ans.push_back(sq);
-        }
     }
 
     return ans;
@@ -545,9 +484,7 @@ void setAttackedSquares(Position& pos) {
     // lambda kinda function that adds a move to the list of accessed squares
     auto add_moves = [&total_access](const std::vector<uint8_t>& moves) {
         for (uint8_t move : moves)
-        {
             total_access.insert(move);
-        }
     };
 
     // also for each square in the board
@@ -604,9 +541,7 @@ bool is_tactical(const Move& _move) {
     uint8_t _flag = _move.getFlags();
 
     if (_flag == CAPTURE)
-    {
         return true;
-    }
 
     return false;
 }
@@ -629,69 +564,47 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
 
     // if the move has the valid format
     if (!move.is_ok())
-    {
         return false;
-    }
 
     // if the destination is occupied by us
     if (our_occ.is_bitset(to) == true)
-    {
         return false;
-    }
 
     // no one moves twice
     if (color != _move_color)
-    {
         return false;
-    }
 
     // no void moves
     if (pos.pieceOn(from) == NOPE)
-    {
         return false;
-    }
 
     // can't move to the same square you're in
     if (from == to)
-    {
         return false;
-    }
 
     // can't move a void piece
     if (moved_piece == NOPE)
-    {
         return false;
-    }
 
     // can't casle with no king
     if ((_flag == KSCastle || _flag == QSCastle) && moved_piece != KING)
-    {
         return false;
-    }
 
     // can't en passant with no pawn
     if (_flag == EN_PASSANT && moved_piece != PAWN)
-    {
         return false;
-    }
 
     // the destination sqaure in en passant should always be empty
     if (_flag == EN_PASSANT && pos.pieceOn(to) != NOPE)
-    {
         return false;
-    }
 
     // can't capture on an empty square
     if (_flag == Capture && pos.pieceOn(to) == NOPE)
-    {
         return false;
-    }
 
     // can't promote with no pawn
     if ((_flag == Promo || _flag == enPassant) && moved_piece != PAWN)
-    {
         return false;
-    }
 
     const uint8_t NORTH = (color == WHITE) ? -8 : 8;  // set north fot simplicity
 
@@ -702,22 +615,16 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
         std::vector<uint8_t> moves = pawn_moves(from, color, pos);
         // the given moves should always exist in this list
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
-        {
             return false;
-        }
 
         // additional checks for robustness
         if (_flag == EN_PASSANT)
         {
             if (color == WHITE && to != (from + NORTH))
-            {
                 return false;
-            }
 
             if (color == BLACK && to != (from - NORTH))
-            {
                 return false;
-            }
         }
         else if (_flag == Capture && pos.pieceOn(to) == NOPE)
         {
@@ -726,26 +633,18 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
         else if (_flag == Promo)
         {
             if (color == WHITE ? ranks[from] != 6 : ranks[from] != 1)
-            {
                 return false;
-            }
 
             if (color == WHITE ? ranks[to] != 7 : ranks[to] != 1)
-            {
                 return false;
-            }
         }
         else
         {
             if (color == WHITE && ranks[from] >= 1 && ranks[from] < 6 && ranks[from] >= ranks[to])
-            {
                 return false;
-            }
 
             if (color == BLACK && ranks[from] >= 6 && ranks[from] < 1 && ranks[from] <= ranks[to])
-            {
                 return false;
-            }
         }
     }
     break;
@@ -756,9 +655,7 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
         std::vector<uint8_t> moves = knight_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
-        {
             return false;
-        }
     }
     break;
 
@@ -766,9 +663,7 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
         std::vector<uint8_t> moves = bishop_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
-        {
             return false;
-        }
     }
     break;
 
@@ -776,9 +671,7 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
         std::vector<uint8_t> moves = rook_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
-        {
             return false;
-        }
     }
     break;
 
@@ -786,17 +679,13 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
         std::vector<uint8_t> moves = queen_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
-        {
             return false;
-        }
     }
     break;
 
     case KING : {
         if (pos.isAttacked(to, color))
-        {
             return false;
-        }
 
         if (_flag == KSCastle)
         {
@@ -805,7 +694,6 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
                 if (occupancy.is_bitset(f1) || occupancy.is_bitset(g1) || pos.isAttacked(f1, WHITE)
                     || pos.isAttacked(g1, WHITE))
                 {
-
                     return false;
                 }
             }
@@ -814,7 +702,6 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
                 if (occupancy.is_bitset(f8) || occupancy.is_bitset(g8) || pos.isAttacked(f8, BLACK)
                     || pos.isAttacked(g8, BLACK))
                 {
-
                     return false;
                 }
             }
@@ -827,7 +714,6 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
                     || pos.isAttacked(d1, WHITE) || pos.isAttacked(c1, WHITE)
                     || pos.isAttacked(b1, WHITE))
                 {
-
                     return false;
                 }
             }
@@ -837,7 +723,6 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
                     || pos.isAttacked(d8, BLACK) || pos.isAttacked(c8, BLACK)
                     || pos.isAttacked(b8, BLACK))
                 {
-
                     return false;
                 }
             }
@@ -846,9 +731,7 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
         std::vector<uint8_t> moves = king_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
-        {
             return false;
-        }
     }
     break;
 
@@ -864,9 +747,7 @@ Bitboard get_piece_attacks(const Position& pos, uint8_t square) {
     pieceType piece = pos.pieceOn(square);
 
     if (piece == NOPE)
-    {
         return Bitboard(0ULL);
-    }
 
     // typical data
     uint8_t              side   = pos.getColor(square);
@@ -876,17 +757,13 @@ Bitboard get_piece_attacks(const Position& pos, uint8_t square) {
 
     // if no moves for the given piece then return a 0 bitboard
     if (moves.empty())
-    {
         return Bitboard(0ULL);
-    }
 
     // fetch the result in brute force
     for (const int8_t m : moves)
     {
         if (occ.is_bitset(m))
-        {
             result.set_bit(m);
-        }
     }
 
     return result;
@@ -908,9 +785,7 @@ bool isLegal(const Position& pos, const Move& move) {
 
     // all seen before
     if (_flag != Capture && pos.pieceOn(to) != NOPE)
-    {
         return false;
-    }
 
     if (piece == KING)
     {
@@ -928,15 +803,11 @@ bool isLegal(const Position& pos, const Move& move) {
         }
 
         if (pos.isAttacked(to, color))
-        {
             return false;
-        }
     }
 
     if (pos.isPinned(from))
-    {
         return false;
-    }
 
     return true;
 }
