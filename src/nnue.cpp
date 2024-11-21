@@ -1,10 +1,5 @@
 #include "nnue.h"
-
 #include "position.h"
-
-#ifdef __APPLE__
-#endif
-
 #include <cassert>
 #include <cstdint>
 #include <math.h>
@@ -138,9 +133,7 @@ LinearLayer::LinearLayer(int input_size, int output_size, double lr) {
     {
         // Initialize the weights for each input, including an extra one for bias
         for (int j = 0; j <= input_size; j++)
-        {
             weights[i][j] = (float) rand() / RAND_MAX;
-        }
     }
 }
 
@@ -161,9 +154,7 @@ std::vector<int16_t> LinearLayer::feedForward(const std::vector<int16_t>& input)
 
         // For each output neuron, calculate the weighted sum of inputs
         for (int w = 0; w < input_dims; w++)
-        {
             sum += weights[i][w] * input[w];
-        }
 
         // Add the bias term to the weighted sum
         sum += weights[i][input_dims];
@@ -192,9 +183,7 @@ std::vector<int16_t> LinearLayer::backPropagate(const std::vector<int16_t>& grad
 
         // Sum up the gradients coming from each output neuron, weighted by the connection
         for (int j = 0; j < output_dims; j++)
-        {
             g += grad[j] * weights[j][i];
-        }
 
         // Store the gradient for this neuron in the previous layer
         prev_layer_grad.push_back(g);
@@ -204,10 +193,8 @@ std::vector<int16_t> LinearLayer::backPropagate(const std::vector<int16_t>& grad
     for (int i = 0; i < output_dims; i++)
     {
         for (int j = 0; j < input_dims; j++)
-        {
             // Update each weight by subtracting a scaled version of the gradient
             weights[i][j] -= (eta * grad[i] * inputs[j]);
-        }
 
         // Update the bias for each output neuron
         weights[i][input_dims] -= eta * grad[i];
@@ -223,18 +210,14 @@ std::vector<int16_t> NNue::linear(const LinearLayer&          layer,
                                   const std::vector<int16_t>& input) const {
     // Initialize the output vector by setting each value to the corresponding bias for the layer
     for (int i = 0; i < layer.get_num_outputs(); i++)
-    {
         output[i] = layer.getBias()[i];
-    }
 
     // Compute the weighted sum of inputs for each output neuron
     for (int i = 0; i < layer.get_num_inputs(); i++)
     {
         for (int j = 0; j < layer.get_num_outputs(); ++j)
-        {
             // Multiply the input by the weight and add it to the corresponding output neuron
             output[j] += input[i] * layer.getWeights(i)[j];
-        }
     }
 
     // Return the resulting output vector
@@ -249,9 +232,7 @@ std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t>       output,
 
     // Apply ReLU with values clipped between 0 and 1
     for (int i = 0; i < size; i++)
-    {
         output[i] = min(max(input[i], 0), 1);
-    }
 
     return output;
 }
@@ -274,9 +255,7 @@ float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) cons
 
     // Load input into current_input
     for (int i = 0; i < MAX_INPUT_SIZE; i++)
-    {
         current_input[i] = input[i];
-    }
 
     std::vector<int16_t> next_output;
 
@@ -310,17 +289,13 @@ void NNue::refresh_accumulator(const LinearLayer&           layer,
 
     // Reset the cache with the layer's biases for the current side
     for (int i = 0; i < size; ++i)
-    {
         caches[perspective][i] = layer.getBias()[i];
-    }
 
     // Add contributions from each active feature
     for (uint32_t a : active_features)
     {
         for (int i = 0; i < size; ++i)
-        {
             caches[perspective][i] += layer.getWeights(a)[i];
-        }
     }
 }
 
@@ -335,26 +310,20 @@ void NNue::update_accumulator(const LinearLayer&           layer,
 
     // Initialize the accumulator with the current cache
     for (int i = 0; i < size; ++i)
-    {
         new_acc[perspective][i] = caches[perspective][i];
-    }
 
     // Subtract weights of removed features
     for (uint32_t r : removed_features)
     {
         for (int i = 0; i < size; ++i)
-        {
             new_acc[perspective][i] -= layer.getWeights(r)[i];
-        }
     }
 
     // Add weights of new added features
     for (uint32_t a : added_features)
     {
         for (int i = 0; i < size; ++i)
-        {
             new_acc[perspective][i] += layer.getWeights(a)[i];
-        }
     }
 
     // Update the cache with the new accumulator
