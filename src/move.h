@@ -28,9 +28,7 @@ struct MoveList {
         sc_move.move = _move;
 
         if (sizeof(moves) >= size)
-        {
             return;
-        }
 
         moves[size++] = sc_move;
     }
