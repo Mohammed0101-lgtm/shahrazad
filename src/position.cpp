@@ -59,9 +59,7 @@ uint8_t Position::material_score() const {
     for (int i = 0; i < 64; i++)
     {
         if (pieces[i] == NOPE || pieces[i] == KING)
-        {
             continue;
-        }
 
         switch (pieces[i])
         {
@@ -98,9 +96,7 @@ uint8_t Position::getColor(int sq) const {
     pieceType piece = pieceOn(sq);
 
     if (piece == NOPE)
-    {
         return BOTH;
-    }
 
     Bitboard occ = _white_occupancy();
 
@@ -154,9 +150,7 @@ void Position::undo_move(const Move move) {
 
 uint8_t Position::isPinned(const int sq) const {
     if (pieces[sq] == NOPE)
-    {
         return false;
-    }
 
     Bitboard opponent_occupancy = current_side == WHITE ? _black_occupancy() : _white_occupancy();
 
@@ -169,9 +163,7 @@ uint8_t Position::isPinned(const int sq) const {
               bishop_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end())
-            {
                 return op_sq;
-            }
 
             break;
         }
@@ -181,9 +173,7 @@ uint8_t Position::isPinned(const int sq) const {
               queen_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end())
-            {
                 return op_sq;
-            }
 
             break;
         }
@@ -193,9 +183,7 @@ uint8_t Position::isPinned(const int sq) const {
               rook_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end())
-            {
                 return op_sq;
-            }
 
             break;
         }
@@ -223,13 +211,9 @@ uint64_t genPositionKey(const Position& pos) {
     }
 
     if (pos.getSide() == WHITE)
-    {
         return (key ^= sideKey[0]);
-    }
     else
-    {
         return (key ^= sideKey[1]);
-    }
 }
 
 Position::Position(bool resest) {
