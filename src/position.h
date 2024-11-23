@@ -45,27 +45,19 @@ class Position {
     Position() :
         current_side(WHITE) {
         for (int i = 0; i < 64; i++)
-        {
             attacked_black[i] = false;
-        }
 
         for (int i = 0; i < 64; i++)
-        {
             attacked_white[i] = false;
-        }
     }
 
     Position(int color) :
         current_side(color) {
         for (int i = 0; i < 64; i++)
-        {
             attacked_black[i] = false;
-        }
 
         for (int i = 0; i < 64; i++)
-        {
             attacked_white[i] = false;
-        }
     }
 
     Position::Position(bool resest = true);
