@@ -43,16 +43,12 @@ static bool isRepetition(const Position& pos) {
         if (pos.played_positions[start - i] == pos.position_key)
         {
             if (i <= pos.stacked_his && i <= pos.stacked_his)
-            {
                 return true;
-            }
 
             counter++;
 
             if (counter >= 2)
-            {
                 return true;
-            }
         }
     }
 
@@ -72,20 +68,14 @@ bool isMaterialDraw(const Position& pos) {
         if (piece != NOPE)
         {
             if (white_occ.is_bitset(square))
-            {
                 w_pieces.push_back(piece);
-            }
             else
-            {
                 b_pieces.push_back(piece);
-            }
         }
     }
 
     if (w_pieces.empty() && b_pieces.empty())
-    {
         return true;
-    }
 
     const int sum = w_pieces.size() + b_pieces.size();
 
@@ -104,9 +94,7 @@ bool isMaterialDraw(const Position& pos) {
             for (pieceType piece : pieces)
             {
                 if (piece != KNIGHT)
-                {
                     return false;
-                }
             }
 
             return true;
@@ -201,29 +189,21 @@ bool SEE(const Position pos, Move& move, int thresh_hold) {
     int          side = pos.current_side;
 
     if (_flag == KSCastle || _flag == QSCastle)
-    {
         return thresh_hold <= 0;
-    }
 
     if (val < 0)
-    {
         return false;
-    }
 
     pieceType attacker = pos.pieceOn(from);
     val -= _flag == Promo ? SEEval[promo] : SEEval[attacker];
 
     if (val >= 0)
-    {
         return true;
-    }
 
     Bitboard occ = pos.occupancy().board() ^ (1ULL << from);
 
     if (_flag == enPassant)
-    {
         occ;  // ^= get_enpassant_sq(pos);
-    }
 
     uint64_t attackers;  //  = pos.attacks_to(to, occ);
 
@@ -243,18 +223,14 @@ bool SEE(const Position pos, Move& move, int thresh_hold) {
         Bitboard OurAttackers = attackers & our_occ.board();
 
         if (!OurAttackers.board())
-        {
             break;
-        }
 
         pieceType piece_type;
         for (piece_type = PAWN; piece_type < KING;
              piece_type = static_cast<pieceType>(piece_type + 1))
         {
             if (OurAttackers.board() & get_piece_by_type(&pos, piece_type).board())
-            {
                 break;
-            }
         }
 
         side ^= 1;
@@ -263,9 +239,7 @@ bool SEE(const Position pos, Move& move, int thresh_hold) {
         if (val >= 0)
         {
             if (piece_type == KING && (attackers & our_occ.board()))
-            {
                 side ^= 1;
-            }
 
             break;
         }
@@ -273,14 +247,10 @@ bool SEE(const Position pos, Move& move, int thresh_hold) {
         // occ ^= 1ULL << ();
 
         if (piece_type == PAWN || piece_type == BISHOP || piece_type == QUEEN)
-        {
             attackers |= get_piece_attacks(pos, to).board() & bishops.board();
-        }
 
         if (piece_type == ROOK || piece_type == QUEEN)
-        {
             attackers |= get_piece_attacks(pos, to).board() & rooks.board();
-        }
     }
 
     return side != pos.getColor(from);
@@ -306,19 +276,13 @@ int search(
     MoveList    list;
 
     if (!excludedMove_val)
-    {
         pv_table->pvLength[ss->ply] = ss->ply;
-    }
 
     if (ss->ply > info->seldepth)
-    {
         info->seldepth = ss->ply;
-    }
 
     if (depth <= 0)
-    {
         return 0;
-    }
 
     if (thread_data->id == 0 && TimeOver(&thread_data->info))
     {
@@ -329,22 +293,16 @@ int search(
     if (!isRootNode)
     {
         if (isDraw(*pos))
-        {
             return 0;
-        }
 
         if (ss->ply >= MAX_DEPTH - 1)
-        {
             return inCheck ? 0 : network_eval(*pos, nnue, caches);
-        }
 
         alpha = std::max(alpha, -MATE_SCORE + ss->ply);
         beta  = std::min(beta, MATE_SCORE - ss->ply - 1);
 
         if (alpha >= beta)
-        {
             return alpha;
-        }
 
         // check for upcoming repetition
     }
@@ -363,9 +321,7 @@ int search(
     }
 
     if (depth >= 4 && tt_data.bound == NO_BOUND)
-    {
         depth--;
-    }
 
     (ss + 1)->excludedMove = NOMOVE;
     (ss + 1)->searchKiller = NOMOVE;
@@ -403,21 +359,13 @@ int search(
     }
 
     if (inCheck)
-    {
         improve = false;
-    }
     else if ((ss - 2)->staticEval != SCORE_NONE)
-    {
         improve = ss->staticEval > (ss - 2)->staticEval;
-    }
     else if ((ss - 4)->staticEval != SCORE_NONE)
-    {
         improve = ss->staticEval > (ss - 4)->staticEval;
-    }
     else
-    {
         improve = true;
-    }
 
     if (!pvNode && !excludedMove_val && !inCheck)
     {
@@ -444,14 +392,10 @@ int search(
             if (nmpScore >= beta)
             {
                 if (nmpScore > MATE_FOUND)
-                {
                     nmpScore = beta;
-                }
 
                 if (thread_data->nmpPlies || depth < 15)
-                {
                     return nmpScore;
-                }
 
                 thread_data->nmpPlies = ss->ply + (depth - R) * 3;
                 int verificationScore =
@@ -459,9 +403,7 @@ int search(
                 thread_data->nmpPlies = 0;
 
                 if (verificationScore >= beta)
-                {
                     return nmpScore;
-                }
             }
         }
 
@@ -470,9 +412,7 @@ int search(
             const int razorScore = Quiescence<false>(alpha, beta, thread_data, ss);
 
             if (razorScore <= alpha)
-            {
                 return razorScore;
-            }
         }
     }
 
@@ -489,9 +429,7 @@ int search(
     while ((move = move_picker.next(skipQuiets)) != NOMOVE)
     {
         if (move == excludedMove || !isLegal(*pos, move))
-        {
             continue;
-        }
 
         totalMoves++;
 
@@ -509,20 +447,14 @@ int search(
             if (!skipQuiets)
             {
                 if (!pvNode && !inCheck && totalMoves > lmp_margin[std::min(depth, 63)][improve])
-                {
                     skipQuiets = true;
-                }
 
                 if (!inCheck && lmrDepth < 11 && ss->staticEval + 250 + 150 * lmrDepth <= alpha)
-                {
                     skipQuiets = true;
-                }
             }
 
             if (depth <= 8 && !SEE(*pos, move, see_margin[std::min(lmrDepth, 63)][isQuiet]))
-            {
                 continue;
-            }
         }
 
         int extension = 0;
@@ -585,33 +517,23 @@ int search(
             if (isQuiet)
             {
                 if (cutNode)
-                {
                     depth_reduction += 2;
-                }
 
                 if (!improve)
-                {
                     depth_reduction++;
-                }
 
                 if (move == move_picker.killer || move == move_picker.count)
-                {
                     depth_reduction--;
-                }
 
                 if (pos->inCheck)
-                {
                     depth_reduction--;
-                }
 
                 depth_reduction -= moveHistory / 8192;
             }
             else
             {
                 if (cutNode)
-                {
                     depth_reduction += 2;
-                }
 
                 depth_reduction -= moveHistory / 6144;
             }
@@ -627,10 +549,8 @@ int search(
                 new_depth += goDeepe - goShallow;
 
                 if (new_depth > reduced_depth)
-                {
                     score -=
                       search<false>(-alpha - 1, -alpha, new_depth, !cutNode, thread_data, ss + 1);
-                }
 
                 int bonus = score > alpha ? history_bonus(depth) : -history_bonus(depth);
 
@@ -643,21 +563,16 @@ int search(
         }
 
         if (pvNode && (totalMoves == 1 || score > alpha))
-        {
             score = -search<true>(-beta, -alpha, new_depth, false, thread_data, ss + 1);
-        }
 
         pos->undo_move(move);
 
         if (thread_data->id == 0 && isRootNode)
-        {
             thread_data->nodeSpentTable[move.getFrom()] += info->nodes - nodes_before_search;
-        }
+
 
         if (info->stopped)
-        {
             return 0;
-        }
 
         if (score > bestScore)
         {
@@ -672,9 +587,7 @@ int search(
                     pv_table->pvArray[ss->ply][ss->ply] = move;
 
                     for (int next = ss->ply + 1; next < pv_table->pvLength[ss->ply + 1]; next++)
-                    {
                         pv_table->pvArray[ss->ply][next] = pv_table->pvArray[ss->ply + 1][next];
-                    }
 
                     pv_table->pvLength[ss->ply] = pv_table->pvLength[ss->ply + 1];
                 }
@@ -686,9 +599,7 @@ int search(
                         ss->searchKiller = best_move;
 
                         if (ss->ply >= 1)
-                        {
                             search_data->counterMoves[(ss - 1)->move.getFrom()] = move.data();
-                        }
                     }
 
                     update_histories(pos, search_data, ss, depth + (eval <= alpha), best_move,
@@ -742,14 +653,10 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
     }
 
     if (isDraw(*pos))
-    {
         return 0;
-    }
 
     if (ss->ply >= MAX_DEPTH - 1)
-    {
         return inCheck ? 0 : network_eval(*pos, nnue, caches);
-    }
 
     ttEntry*   tt_entry = tt.probe(pos->position_key);
     const bool tt_hit   = tt_entry ? true : false;
@@ -792,9 +699,7 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
     }
 
     if (best_score >= beta)
-    {
         return best_score;
-    }
 
     alpha = std::max(alpha, best_score);
 
@@ -808,9 +713,7 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
     while ((move = move_picker.next(!inCheck || best_score > -MATE_FOUND)) != NOMOVE)
     {
         if (!isLegal(*pos, move))
-        {
             continue;
-        }
 
         totalMoves++;
 
@@ -818,9 +721,7 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
         Bitboard pawns     = pos->current_side == WHITE ? pos->white_pawns : pos->black_pawns;
 
         if (pawns.board() != 0ULL)
-        {
             has_pawns = true;
-        }
 
         if (best_score > -MATE_FOUND && !inCheck && !has_pawns)
         {
@@ -842,9 +743,7 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
         pos->undo_move(move);
 
         if (info->stopped)
-        {
             return 0;
-        }
 
         if (score > best_move.data())
         {
@@ -855,9 +754,7 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
                 best_move = move;
 
                 if (score >= beta)
-                {
                     break;
-                }
 
                 alpha = score;
             }
@@ -867,12 +764,12 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
     if (totalMoves == 0 && inCheck)
     {
         return -MATE_SCORE + ss->ply;
+
+        int bound = best_score >= beta ? LOWER : UPPER;
+
+        TT_data new_data(rawEval, bound, best_move.data(), best_score, pos->position_key, 0);
+        tt.save_entry(tt_entry->save(new_data));
+
+        return best_score;
     }
-
-    int bound = best_score >= beta ? LOWER : UPPER;
-
-    TT_data new_data(rawEval, bound, best_move.data(), best_score, pos->position_key, 0);
-    tt.save_entry(tt_entry->save(new_data));
-
-    return best_score;
 }
