@@ -109,9 +109,7 @@ inline std::vector<ThreadData>  threads_data;
 inline uint64_t get_nodes() {
     uint64_t nodes = 0ULL;
     for (auto& t : threads_data)
-    {
         nodes += t.info.nodes;
-    }
 
     return nodes;
 }
@@ -119,16 +117,12 @@ inline uint64_t get_nodes() {
 // stop the thread for whatever reason
 inline void thread_interrupt() {
     for (auto& t : threads_data)
-    {
         t.info.stopped = true;
-    }
 
     for (auto& t : threads)
     {
         if (t.joinable())
-        {
             t.join();
-        }
     }
 
     threads.clear();
