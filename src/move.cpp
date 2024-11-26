@@ -538,12 +538,7 @@ void setAttackedSquares(Position& pos) {
 
 // is the given move a capture
 bool is_tactical(const Move& _move) {
-    uint8_t _flag = _move.getFlags();
-
-    if (_flag == CAPTURE)
-        return true;
-
-    return false;
+    return (_move.getFlags() == CAPTURE);
 }
 
 // pseudo legality checks inspired by stockfish
