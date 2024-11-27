@@ -26,9 +26,7 @@ ttEntry* TranspositionTable::probe(const uint64_t key) const {
     for (int i = 0; i < BUCKET_SIZE; i++)
     {
         if (cluster->entries[i].data.pos_key == key)
-        {
             return &cluster->entries[i];
-        }
     }
 
     return nullptr;
@@ -39,7 +37,5 @@ void TranspositionTable::save_entry(const ttEntry* entry) {
     ttBucket* cluster = &table[_hash % capacity];
     // We have to do some checking for the entry age to decide the replacement
     if (cluster)
-    {
         cluster->entries[0] = *entry;
-    }
 }
