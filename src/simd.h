@@ -2,16 +2,8 @@
 
 #include "nnue.h"
 #include <cstdint>
+#include <arm_neon.h>
 
-
-#ifdef __ARM_NEON
-
-    #include <arm_neon.h>
-
-    #define __builtin_neon_vld1_v
-    #define __builtin_neon_vld1q_v
-    #define __builtin_neon_vst1_v
-    #define __builtin_neon_vst1q_v
 
 using InputType  = std::int32_t;
 using OutputType = std::uint8_t;
@@ -144,16 +136,13 @@ void refresh_accumulator(const LinearLayer&       layer,
                          int                      side) {
     constexpr int register_width = 8;  // Number of 16-bit elements per NEON register (int16x8_t)
     static_assert(size % register_width == 0, "Size must be divisible by the register width");
-
     constexpr int subSets_number = size / register_width;  // Number of subsets
     int16x8_t     regs[subSets_number];                    // SIMD registers
 
     // Load biases into SIMD registers
     const std::vector<int16_t>& biases = layer.getBias();
     for (int i = 0; i < subSets_number; ++i)
-    {
         regs[i] = vld1q_s16(&biases[i * register_width]);  // Load biases for this subset
-    }
 
     // Add contributions from active features
     for (int a : active_features)
@@ -170,9 +159,7 @@ void refresh_accumulator(const LinearLayer&       layer,
 
     // Store the results back into the accumulator
     for (int i = 0; i < subSets_number; ++i)
-    {
         vst1q_s16(&new_acc[side][i * register_width], regs[i]);  // Store the results back
-    }
 }
 
 // Optimized update of accumulator using SIMD instructions for Apple M1
@@ -189,33 +176,23 @@ void update_accumulator(const LinearLayer&             layer,
 
     // Load previous accumulator into SIMD registers
     for (int i = 0; i < subSets_number; i++)
-    {
         regs[i] = vld1_s64(&prev_acc[side][i * register_width]);
-    }
 
     // Subtract weights for removed features
     for (int r : removed_features)
     {
         for (int j = 0; j < subSets_number; j++)
-        {
             regs[j] = vsubq_s16(regs[j], vld1_s64(&layer.getWeights(r)[j * register_width]));
-        }
     }
 
     // Add weights for new added features
     for (int a : added_features)
     {
         for (int j = 0; j < subSets_number; j++)
-        {
             regs[j] = vaddq_s16(regs[j], vld1_s64(&(layer.getWeights(a)[j * register_width])));
-        }
     }
 
     // Store the updated results back into the accumulator
     for (int i = 0; i < subSets_number; i++)
-    {
         vst1q_s64(&new_acc[side][i * register_width], regs[i]);
-    }
 }
-
-#endif  //  __ARM_NEON
