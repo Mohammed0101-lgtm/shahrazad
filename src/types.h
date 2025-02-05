@@ -44,10 +44,10 @@ class Move {
    public:
     Move() = default;
 
-    Move(uint16_t data) :
+    constexpr Move(const uint16_t data) :
         m_Move(data) {}
 
-    Move(uint32_t from, uint32_t to, uint32_t flags) {
+    Move(const uint32_t from, const uint32_t to, const uint32_t flags) {
         m_Move = ((flags & 0xf) << 12) | ((from & 0x3f) << 6) | (to & 0x3f);
     }
 
