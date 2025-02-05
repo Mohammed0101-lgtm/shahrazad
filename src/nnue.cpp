@@ -100,7 +100,7 @@ get_removed_features(const Position& cur_pos, const Position& prev_pos, uint8_t 
 // Returns the weights for a given index in the linear layer.
 int16_t* LinearLayer::getWeights(const int index) const {
     // Ensure that the index is valid
-    assert(index >= 0 && index < weights_dimensions[0]);
+    assert(index >= 0 && index < static_cast<int>(weights_dimensions[0]));
     // Return the weights for the specified index
     return weights[index];
 }
@@ -141,7 +141,7 @@ LinearLayer::LinearLayer(int input_size, int output_size, double lr) {
 // Takes the input vector and produces an output vector based on weights and biases.
 std::vector<int16_t> LinearLayer::feedForward(const std::vector<int16_t>& input) {
     // Ensure that the input size matches the expected dimensions of the layer
-    assert(input.size() == input_dims);
+    assert(static_cast<int>(input.size()) == input_dims);
 
     // Reset the outputs and store the input for later use (e.g., in backpropagation)
     outputs = std::vector<int16_t>();
