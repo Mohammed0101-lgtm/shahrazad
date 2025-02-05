@@ -3,6 +3,7 @@
 #include <cassert>
 #include <vector>
 
+
 Bitboard Position::_black_occupancy() const {
     Bitboard occ = black_bishops.board() | black_king.board() | black_knights.board()
                  | black_pawns.board() | black_queens.board() | black_rooks.board();
@@ -111,16 +112,12 @@ uint8_t Position::numberOf(pieceType piece, int color) const {
 
     case QUEEN :
         return color == WHITE ? white_queens.count() : black_queens.count();
-
     case ROOK :
         return color == WHITE ? white_rooks.count() : black_rooks.count();
-
     case BISHOP :
         return color == WHITE ? white_bishops.count() : black_bishops.count();
-
     case KNIGHT :
         return color == WHITE ? white_knights.count() : white_knights.count();
-
     case PAWN :
         return color == WHITE ? white_pawns.count() : white_pawns.count();
 
@@ -130,7 +127,6 @@ uint8_t Position::numberOf(pieceType piece, int color) const {
 }
 
 void Position::make_null_move() {
-    Position* previous_pos = this;
     switch_side();
     played_positions.push_back(position_key);
     ply_fromNull = 0;
@@ -143,9 +139,9 @@ void Position::take_null_move() {
     *this = *prev;
 }
 
-void Position::undo_move(const Move move) {
+void Position::undo_move() {
     *this      = *prev;
-    this->prev = &Position(played_positions[played_positions.size() - 1]);
+    this->prev = &(Position(played_positions[played_positions.size() - 1]));
 }
 
 uint8_t Position::isPinned(const int sq) const {
@@ -216,7 +212,7 @@ uint64_t genPositionKey(const Position& pos) {
         return (key ^= sideKey[1]);
 }
 
-Position::Position(bool resest) {
+void Position::reset() {
     white_pawns   = Bitboard();
     white_king    = Bitboard();
     white_knights = Bitboard();
