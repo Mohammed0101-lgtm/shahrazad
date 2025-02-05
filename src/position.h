@@ -5,6 +5,7 @@
 
 #include <vector>
 
+
 inline uint64_t pieceKeys[12][64];
 inline uint64_t sideKey[2];
 
@@ -60,8 +61,6 @@ class Position {
             attacked_white[i] = false;
     }
 
-    Position::Position(bool resest = true);
-
     Position get_previous_position() const;
 
     Bitboard _black_occupancy() const;
@@ -70,9 +69,11 @@ class Position {
 
     Bitboard occupancy() const;
 
+    void reset();
+
     void switch_side();
 
-    void undo_move(const Move move);
+    void undo_move();
 
     void make_null_move();
 
