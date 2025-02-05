@@ -10,7 +10,6 @@ void do_move(Position& pos, const Move& move) {
     // data about the given move and position
     uint8_t   from   = move.getFrom();
     uint8_t   to     = move.getTo();
-    uint8_t   _flag  = move.getFlags();
     uint8_t   _color = pos.getColor(from);
     pieceType piece  = pos.pieceOn(from);
 
@@ -286,7 +285,7 @@ std::vector<uint8_t> queen_moves(const uint8_t square, const uint8_t color, cons
     for (uint8_t i = 0, n = b.size(); i < n; i++)
         moves[i] = b[i];
 
-    for (uint8_t i = b.size(), n = b.size() + r.size(), k = 0; i < n, k < r.size(); i++)
+    for (uint8_t i = b.size(), n = b.size() + r.size(), k = 0; i < n && k < r.size(); i++)
         moves[i] = r[k++];
 
     return moves;
@@ -302,10 +301,9 @@ std::vector<uint8_t> knight_moves(const uint8_t square, uint8_t color, const Pos
     std::vector<uint8_t> moves;
 
     Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
-    uint8_t knight_moves[8][2] = {{-2, 1}, {-2, -1}, {2, 1}, {2, -1},
-                                  {-1, 2}, {-1, -2}, {1, 2}, {1, -2}};
+    int8_t knight_moves[8][2] = {{-2, 1}, {-2, -1}, {2, 1}, {2, -1},
+                                 {-1, 2}, {-1, -2}, {1, 2}, {1, -2}};
 
     uint8_t start_file = square % 8;
     uint8_t start_rank = square / 8;
@@ -339,7 +337,6 @@ std::vector<uint8_t> king_moves(const uint8_t square, uint8_t color, const Posit
 
     // get occupancies
     Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
     // moves of 1 square in every direction
     uint8_t bottom_right = square - 7;
@@ -353,28 +350,29 @@ std::vector<uint8_t> king_moves(const uint8_t square, uint8_t color, const Posit
 
     // checking boundaries and occupancies for validation
 
-    if (bottom_left >= 0 && ((bottom_left + 1) % 8) != 0)
+    if ((bottom_left >= 0 && ((bottom_left + 1) % 8) != 0)
+        && !(our_occupancy.is_bitset(bottom_left)))
         moves.push_back(bottom_left);
 
-    if (bottom_right >= 0 && (bottom_right % 8) != 0)
+    if ((bottom_right >= 0 && (bottom_right % 8) != 0) && !(our_occupancy.is_bitset(bottom_right)))
         moves.push_back(bottom_right);
 
-    if (top_left < 64 && (top_left + 1) % 8 != 0)
+    if ((top_left < 64 && (top_left + 1) % 8 != 0) && !(our_occupancy.is_bitset(top_left)))
         moves.push_back(top_left);
 
-    if (top_right < 64 && (top_right + 1) % 8 != 0)
+    if ((top_right < 64 && (top_right + 1) % 8 != 0) && !(our_occupancy.is_bitset(top_right)))
         moves.push_back(top_right);
 
-    if (up < 64)
+    if (up < 64 && !(our_occupancy.is_bitset(up)))
         moves.push_back(up);
 
-    if (down >= 0)
+    if (down >= 0 && !(our_occupancy.is_bitset(down)))
         moves.push_back(down);
 
-    if (left >= 0 && (left + 1) % 8 != 0)
+    if ((left >= 0 && (left + 1) % 8 != 0) && !(our_occupancy.is_bitset(left)))
         moves.push_back(left);
 
-    if (right < 64 && right % 8 != 0)
+    if ((right < 64 && right % 8 != 0) && !(our_occupancy.is_bitset(right)))
         moves.push_back(right);
 
     return moves;
@@ -478,7 +476,6 @@ std::vector<uint8_t> piece_squares(pieceType piece_type, const Position& pos) {
 void setAttackedSquares(Position& pos) {
     // position data
     uint8_t                    color        = pos.getSide();
-    uint8_t                    oppent_color = color == WHITE ? BLACK : WHITE;
     std::unordered_set<int8_t> total_access;  // ret container
 
     // lambda kinda function that adds a move to the list of accessed squares
@@ -537,9 +534,7 @@ void setAttackedSquares(Position& pos) {
 }
 
 // is the given move a capture
-bool is_tactical(const Move& _move) {
-    return (_move.getFlags() == CAPTURE);
-}
+bool is_tactical(const Move& _move) { return (_move.getFlags() == CAPTURE); }
 
 // pseudo legality checks inspired by stockfish
 bool isPseudoLegal(const Position& pos, const Move& move) {
