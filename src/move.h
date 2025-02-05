@@ -27,7 +27,7 @@ struct MoveList {
         ScoredMove sc_move;
         sc_move.move = _move;
 
-        if (sizeof(moves) >= size)
+        if (sizeof(moves) >= static_cast<unsigned long>(size))
             return;
 
         moves[size++] = sc_move;
