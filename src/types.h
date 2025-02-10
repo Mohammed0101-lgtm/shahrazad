@@ -14,9 +14,9 @@ inline static const float    PAWN_VAL   = 1.00;
 inline static const float    KNIGHT_VAL = 3.00;
 inline static const uint64_t MASK       = 1ULL;
 
-inline int reductions[2][64][64];
-inline int lmp_margin[64][2];
-inline int see_margin[64][2];
+inline int    reductions[2][64][64];
+inline int    lmp_margin[64][2];
+inline int    see_margin[64][2];
 
 constexpr int SEEval[15] = {100, 422, 422, 642, 1015, 0, 100, 422, 422, 642, 1015, 0, 0, 0, 0};
 
