@@ -4,85 +4,94 @@
 #include <vector>
 
 
-Bitboard Position::_black_occupancy() const {
-    Bitboard occ = black_bishops.board() | black_king.board() | black_knights.board()
-                 | black_pawns.board() | black_queens.board() | black_rooks.board();
+namespace Shahrazad {
+namespace position {
+
+board::Bitboard Position::_black_occupancy() const {
+    board::Bitboard occ = black_bishops.board() | black_king.board() | black_knights.board() | black_pawns.board()
+                        | black_queens.board() | black_rooks.board();
 
     return occ;
 }
 
-Bitboard Position::_white_occupancy() const {
-    Bitboard occ = white_bishops.board() | white_king.board() | white_knights.board()
-                 | white_pawns.board() | white_queens.board() | white_rooks.board();
+board::Bitboard Position::_white_occupancy() const {
+    board::Bitboard occ = white_bishops.board() | white_king.board() | white_knights.board() | white_pawns.board()
+                        | white_queens.board() | white_rooks.board();
 
     return occ;
 }
 
-Bitboard Position::occupancy() const {
-    Bitboard occ = _black_occupancy().board() | _white_occupancy().board();
-
+board::Bitboard Position::occupancy() const {
+    board::Bitboard occ = _black_occupancy().board() | _white_occupancy().board();
     return occ;
 }
 
-pieceType Position::pieceOn(const int sq) const {
+types::PieceType Position::pieceOn(const int sq) const {
     assert(sq < 64 && sq >= 0);
     return pieces[sq];
 }
 
-bool Position::isAttacked(int sq, int color) const {
-    assert(color == WHITE || color == BLACK);
-    return color == WHITE ? attacked_white[sq] : attacked_black[sq];
+types::PieceType Position::pieceOn(const types::Square sq) const {
+    assert(sq < types::Square::h8 && sq >= types::Square::a1);
+    return pieces[static_cast<int>(sq)];
 }
 
-bool Position::canCastle(int castle_side) const { return castle_perm[castle_side]; }
-
-uint8_t Position::getSide() const { return current_side; }
-
-uint8_t Position::piece_count() const { return occupancy().count(); }
-
-Position Position::get_previous_position() const { return *prev; }
-
-void Position::switch_side() { current_side ^= 1; }
-
-uint8_t Position::king_square(int color) const {
-    return color == WHITE ? white_king.square() : black_king.square();
+bool Position::isAttacked(types::Square sq, types::Color color) const {
+    assert(color == types::Color::WHITE || color == types::Color::BLACK);
+    return color == types::Color::WHITE ? attacked_white[static_cast<int>(sq)] : attacked_black[static_cast<int>(sq)];
 }
 
-bool Position::isPiece(int sq, pieceType piece) const {
+bool         Position::canCastle(int castle_side) const { return castle_perm[castle_side]; }
+types::Color Position::getSide() const { return current_side; }
+unsigned int Position::piece_count() const { return occupancy().count(); }
+Position     Position::get_previous_position() const { return *prev; }
+void         Position::switch_side() { current_side = types::Color(static_cast<int>(current_side) ^ 1); }
+
+types::Square Position::king_square(types::Color color) const {
+    return color == types::Color::WHITE ? types::Square(white_king.square()) : types::Square(black_king.square());
+}
+
+bool Position::isPiece(int sq, types::PieceType piece) const {
     assert(sq >= 0 && sq <= 64);
+
     if (piece != pieces[sq])
+    {
         return false;
+    }
+
     return true;
 }
 
-uint8_t Position::material_score() const {
+unsigned int Position::material_score() const {
     int score = 0;
     for (int i = 0; i < 64; i++)
     {
-        if (pieces[i] == NOPE || pieces[i] == KING)
+        if (pieces[i] == types::PieceType::NOPE || pieces[i] == types::PieceType::KING)
+        {
             continue;
+        }
 
         switch (pieces[i])
         {
 
-        case PAWN :
-            score += PAWN_VAL;
+        case types::PieceType::PAWN :
+            score += types::PAWN_VAL;
             break;
 
-        case KNIGHT :
-            score += KNIGHT_VAL;
+        case types::PieceType::KNIGHT :
+            score += types::KNIGHT_VAL;
             break;
 
-        case BISHOP :
-            score += BISHOP_VAL;
+        case types::PieceType::BISHOP :
+            score += types::BISHOP_VAL;
             break;
 
-        case ROOK :
-            score += ROOK_VAL;
+        case types::PieceType::ROOK :
+            score += types::ROOK_VAL;
             break;
 
-        case QUEEN :
-            score += QUEEN_VAL;
+        case types::PieceType::QUEEN :
+            score += types::QUEEN_VAL;
             break;
 
         default :
@@ -93,33 +102,34 @@ uint8_t Position::material_score() const {
     return score;
 }
 
-uint8_t Position::getColor(int sq) const {
-    pieceType piece = pieceOn(sq);
+types::Color Position::getColor(types::Square sq) const {
+    types::PieceType piece = pieceOn(sq);
 
-    if (piece == NOPE)
-        return BOTH;
+    if (piece == types::PieceType::NOPE)
+    {
+        return types::Color::BOTH;
+    }
 
-    Bitboard occ = _white_occupancy();
-
-    return occ.is_bitset(sq) ? WHITE : BLACK;
+    board::Bitboard occ = _white_occupancy();
+    return occ.is_bitset(sq) ? types::Color::WHITE : types::Color::BLACK;
 }
 
-uint8_t Position::numberOf(pieceType piece, int color) const {
-    assert(color < BOTH && color >= WHITE);
+unsigned int Position::numberOf(types::PieceType piece, types::Color color) const {
+    assert(color == types::Color::BLACK || color == types::Color::WHITE);
 
     switch (piece)
     {
 
-    case QUEEN :
-        return color == WHITE ? white_queens.count() : black_queens.count();
-    case ROOK :
-        return color == WHITE ? white_rooks.count() : black_rooks.count();
-    case BISHOP :
-        return color == WHITE ? white_bishops.count() : black_bishops.count();
-    case KNIGHT :
-        return color == WHITE ? white_knights.count() : white_knights.count();
-    case PAWN :
-        return color == WHITE ? white_pawns.count() : white_pawns.count();
+    case types::PieceType::QUEEN :
+        return color == types::Color::WHITE ? white_queens.count() : black_queens.count();
+    case types::PieceType::ROOK :
+        return color == types::Color::WHITE ? white_rooks.count() : black_rooks.count();
+    case types::PieceType::BISHOP :
+        return color == types::Color::WHITE ? white_bishops.count() : black_bishops.count();
+    case types::PieceType::KNIGHT :
+        return color == types::Color::WHITE ? white_knights.count() : white_knights.count();
+    case types::PieceType::PAWN :
+        return color == types::Color::WHITE ? white_pawns.count() : white_pawns.count();
 
     default :
         return 0;
@@ -140,47 +150,54 @@ void Position::take_null_move() {
 }
 
 void Position::undo_move() {
-    *this      = *prev;
-    this->prev = &(Position(played_positions[played_positions.size() - 1]));
+    *this = *prev;
+    // static position::Position previous = position::Position(played_positions[played_positions.size() - 1]);
+    // this->prev = &previous;
 }
 
-uint8_t Position::isPinned(const int sq) const {
-    if (pieces[sq] == NOPE)
-        return false;
+types::Square Position::isPinned(const types::Square sq) const {
+    if (pieces[static_cast<int>(sq)] == types::PieceType::NOPE)
+      {  return types::Square::NONE;}
 
-    Bitboard opponent_occupancy = current_side == WHITE ? _black_occupancy() : _white_occupancy();
+    board::Bitboard opponent_occupancy = current_side == types::Color::WHITE ? _black_occupancy() : _white_occupancy();
 
     for (int op_sq = 0; op_sq < 64 && opponent_occupancy.is_bitset(op_sq); op_sq++)
     {
         switch (pieces[op_sq])
         {
-        case BISHOP : {
-            std::vector<uint8_t> moves =
-              bishop_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
+        case types::PieceType::BISHOP : {
+            std::vector<types::Move> moves =
+              movegen::bishop_moves(sq, current_side == types::Color::WHITE ? types::Color::BLACK : types::Color::WHITE,
+                                    *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end())
-                return op_sq;
-
+            {
+                return types::Square(op_sq);
+            }
             break;
         }
 
-        case QUEEN : {
-            std::vector<uint8_t> moves =
-              queen_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
+        case types::PieceType::QUEEN : {
+            std::vector<types::Move> moves =
+              movegen::queen_moves(sq, current_side == types::Color::WHITE ? types::Color::BLACK : types::Color::WHITE,
+                                   *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end())
-                return op_sq;
-
+            {
+                return types::Square(op_sq);
+            }
             break;
         }
 
-        case ROOK : {
-            std::vector<uint8_t> moves =
-              rook_moves(sq, current_side == WHITE ? BLACK : WHITE, *this);
+        case types::PieceType::ROOK : {
+            std::vector<types::Move> moves =
+              movegen::rook_moves(sq, current_side == types::Color::WHITE ? types::Color::BLACK : types::Color::WHITE,
+                                  *this);
 
             if (std::find(moves.begin(), moves.end(), sq) != moves.end())
-                return op_sq;
-
+            {
+                return types::Square(op_sq);
+            }
             break;
         }
 
@@ -189,46 +206,50 @@ uint8_t Position::isPinned(const int sq) const {
         }
     }
 
-    return NOPE;
+    return types::Square::NONE;
 }
 
 uint64_t genPositionKey(const Position& pos) {
-    uint64_t key;
+    uint64_t key = 0;
 
     for (int sq = 0; sq < 64; sq++)
     {
-        const pieceType piece = pos.pieceOn(sq);
+        const types::PieceType piece = pos.pieceOn(sq);
 
-        if (piece != NOPE)
+        if (piece != types::PieceType::NOPE)
         {
-            assert(piece >= KING && piece <= PAWN);
-            key ^= pieceKeys[piece][sq];
+            assert(piece >= types::PieceType::KING && piece <= types::PieceType::PAWN);
+            key ^= pieceKeys[static_cast<int>(piece)][sq];
         }
     }
 
-    if (pos.getSide() == WHITE)
+    if (pos.getSide() == types::Color::WHITE)
+    {
         return (key ^= sideKey[0]);
+    }
     else
+    {
         return (key ^= sideKey[1]);
+    }
 }
 
 void Position::reset() {
-    white_pawns   = Bitboard();
-    white_king    = Bitboard();
-    white_knights = Bitboard();
-    white_bishops = Bitboard();
-    white_queens  = Bitboard();
-    white_rooks   = Bitboard();
+    white_pawns   = board::Bitboard();
+    white_king    = board::Bitboard();
+    white_knights = board::Bitboard();
+    white_bishops = board::Bitboard();
+    white_queens  = board::Bitboard();
+    white_rooks   = board::Bitboard();
 
-    black_pawns   = Bitboard();
-    black_king    = Bitboard();
-    black_knights = Bitboard();
-    black_bishops = Bitboard();
-    black_queens  = Bitboard();
-    black_rooks   = Bitboard();
+    black_pawns   = board::Bitboard();
+    black_king    = board::Bitboard();
+    black_knights = board::Bitboard();
+    black_bishops = board::Bitboard();
+    black_queens  = board::Bitboard();
+    black_rooks   = board::Bitboard();
 
-    current_side        = WHITE;
-    enPassant_square    = NOPE;
+    current_side        = types::Color::WHITE;
+    enPassant_square    = types::Square::NONE;
     stacked_his         = uint8_t();
     half_moves          = uint8_t();
     fifty_moves_counter = uint8_t();
@@ -239,7 +260,7 @@ void Position::reset() {
 
     for (int i = 0; i < 64; i++)
     {
-        pieces[i]         = NOPE;
+        pieces[i]         = types::PieceType::NOPE;
         attacked_white[i] = false;
         attacked_black[i] = false;
     }
@@ -250,3 +271,6 @@ void Position::reset() {
         castle_perm[i] = false;
     }
 }
+
+}  // namespace position
+}  // namespace Shahrazad
