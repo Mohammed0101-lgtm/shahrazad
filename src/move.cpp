@@ -1,33 +1,58 @@
 #include "move.h"
 #include "nnue.h"
 #include "position.h"
+#include "error.h"
+
 #include <cassert>
 #include <unordered_set>
 
 
-// make a move in a given position
-void do_move(Position& pos, const Move& move) {
-    // data about the given move and position
-    uint8_t   from   = move.getFrom();
-    uint8_t   to     = move.getTo();
-    uint8_t   _color = pos.getColor(from);
-    pieceType piece  = pos.pieceOn(from);
+namespace Shahrazad {
+namespace movegen {
 
-    // asserts
-    assert(from < 64 && from >= 0);
-    assert(to < 64 && to >= 0);
-    assert(_color == pos.current_side);
+// make a move in a given position
+void do_move(position::Position& pos, const types::Move& move) {
+    // data about the given move and position
+    types::Square    from   = types::Square(move.getFrom());
+    types::Square    to     = types::Square(move.getTo());
+    types::Color     _color = pos.getColor(from);
+    types::PieceType piece  = pos.pieceOn(from);
+
+    /// asserts
+    // changed from C style asserts to runtime checks with exceptions that
+    // could be caught and handled
+    // assert(from < 64 && from >= 0);
+    if (from < types::Square::h8 || from >= types::Square::a1)
+    {
+        throw Shahrazad::error::Square_error("Invalid square");
+    }
+
+    // assert(to < 64 && to >= 0);
+    if (to < types::Square::h8 || to >= types::Square::a1)
+    {
+        throw Shahrazad::error::Square_error("Invalid square");
+    }
+
+    // assert(_color == pos.current_side);
+    if (_color != pos.current_side)
+    {
+        throw Shahrazad::error::Position_error("Invalid color");
+    }
 
     // store the current position as the previous position of the next one after commiting a move
-    Position previous_position = pos;
-    pos.pieces[from]           = NOPE;
-    pos.pieces[to]             = piece;
+    position::Position previous_position = pos;
+    pos.pieces[(int) (from)]             = types::PieceType::NOPE;
+    pos.pieces[(int) (to)]               = piece;
 
     // increment the fifty moves counter if the move is quiet
-    if (piece == PAWN || move.isCapture())
+    if (piece == types::PieceType::PAWN || move.isCapture())
+    {
         pos.fifty_moves_counter = 0;
+    }
     else
+    {
         pos.fifty_moves_counter++;
+    }
 
     // switch the position's current side
     pos.switch_side();
@@ -37,7 +62,7 @@ void do_move(Position& pos, const Move& move) {
     pos.stacked_his++;
 
     // update the castle permission if the moved piece is a king
-    if (piece == KING)
+    if (piece == types::PieceType::KING)
     {
         pos.castle_perm[0] = false;
         pos.castle_perm[1] = false;
@@ -46,225 +71,263 @@ void do_move(Position& pos, const Move& move) {
     // make move on the bitboard of that piece type map
     switch (piece)
     {
-    case KING :
-        _color == WHITE ? pos.white_king.move_bit(from, to) : pos.black_king.move_bit(from, to);
+    case types::PieceType::KING :
+        _color == types::Color::WHITE ? pos.white_king.move_bit(static_cast<int>(from), static_cast<int>(to))
+                                      : pos.black_king.move_bit(static_cast<int>(from), static_cast<int>(to));
         break;
-    case PAWN :
-        _color == WHITE ? pos.white_pawns.move_bit(from, to) : pos.black_pawns.move_bit(from, to);
+    case types::PieceType::PAWN :
+        _color == types::Color::WHITE ? pos.white_pawns.move_bit(static_cast<int>(from), static_cast<int>(to))
+                                      : pos.black_pawns.move_bit(static_cast<int>(from), static_cast<int>(to));
         break;
-    case KNIGHT :
-        _color == WHITE ? pos.white_knights.move_bit(from, to)
-                        : pos.black_knights.move_bit(from, to);
+    case types::PieceType::KNIGHT :
+        _color == types::Color::WHITE ? pos.white_knights.move_bit(static_cast<int>(from), static_cast<int>(to))
+                                      : pos.black_knights.move_bit(static_cast<int>(from), static_cast<int>(to));
         break;
-    case BISHOP :
-        _color == WHITE ? pos.white_bishops.move_bit(from, to)
-                        : pos.black_bishops.move_bit(from, to);
+    case types::PieceType::BISHOP :
+        _color == types::Color::WHITE ? pos.white_bishops.move_bit(static_cast<int>(from), static_cast<int>(to))
+                                      : pos.black_bishops.move_bit(static_cast<int>(from), static_cast<int>(to));
         break;
-    case ROOK :
-        _color == WHITE ? pos.white_rooks.move_bit(from, to) : pos.black_rooks.move_bit(from, to);
+    case types::PieceType::ROOK :
+        _color == types::Color::WHITE ? pos.white_rooks.move_bit(static_cast<int>(from), static_cast<int>(to))
+                                      : pos.black_rooks.move_bit(static_cast<int>(from), static_cast<int>(to));
         break;
-    case QUEEN :
-        _color == WHITE ? pos.white_queens.move_bit(from, to) : pos.black_queens.move_bit(from, to);
+    case types::PieceType::QUEEN :
+        _color == types::Color::WHITE ? pos.white_queens.move_bit(static_cast<int>(from), static_cast<int>(to))
+                                      : pos.black_queens.move_bit(static_cast<int>(from), static_cast<int>(to));
         break;
     default :
         break;
     }
 
-    uint8_t pers[2] = {WHITE, BLACK};
-
     // update or refresh the NNUE accumalator caches
-    for (uint8_t perspective : pers)
+    for (auto perspective : {types::Color::WHITE, types::Color::BLACK})
     {
-        if (pos.needs_refresh[perspective])
-            nnue.refresh_accumulator(nnue.l_0, get_active_features(pos, perspective), perspective);
+        if (pos.needs_refresh[static_cast<int>(perspective)])
+        {
+            nnue::nnue.refresh_accumulator(nnue::nnue.l_0, nnue::get_active_features(pos, perspective), perspective);
+        }
         else
-            nnue.update_accumulator(nnue.l_0, get_removed_features(pos, *pos.prev, perspective),
-                                    get_added_features(pos, *pos.prev, perspective), perspective);
+        {
+            nnue::nnue.update_accumulator(nnue::nnue.l_0, nnue::get_removed_features(pos, *pos.prev, perspective),
+                                          nnue::get_added_features(pos, *pos.prev, perspective), perspective);
+        }
     }
 }
 
 // generate pawn moves
-std::vector<uint8_t> pawn_moves(const uint8_t square, uint8_t color, const Position& pos) {
+std::vector<types::Move> pawn_moves(const types::Square square, types::Color color, const position::Position& pos) {
     // asserts
-    assert(square < 64 && square >= 0);
-    assert(pos.pieceOn(square) == PAWN);
+    if (square < types::Square::a1 || square > types::Square::h8)
+    {
+        throw Shahrazad::error::Square_error("Invalid square");
+    }
 
-    std::vector<uint8_t> moves;
+    // assert(pos.pieceOn(square) == PAWN);
+    if (pos.pieceOn(square) != types::PieceType::PAWN)
+    {
+        throw Shahrazad::error::Position_error("Invalid piece type");
+    }
+
+    const int                from = static_cast<int>(square);
+    std::vector<types::Move> moves;
 
     // get the occupancy of the current side and the opponent's side
-    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
+    board::Bitboard our_occupancy = color == types::Color::WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    board::Bitboard opp_occupancy = color == types::Color::BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
     // if the requested square actualy has a pawn on it
-    if (our_occupancy.is_bitset(square))
+    if (our_occupancy.is_bitset(from))
     {
         // diagonal left pos
-        uint8_t left = square + 7;
+        uint8_t left = from + 7;
         // forward pos
-        uint8_t up = square + 9;
+        uint8_t up = from + 9;
         // diagonal right pos
-        uint8_t right = square + 9;
+        uint8_t right = from + 9;
+        // assert(square < 64 && square >= 0);
 
         // check occupancies then push back the move to 'moves'
         if (left % 8 != 0 && opp_occupancy.is_bitset(left))
-            moves.push_back(left);
+        {
+            moves.push_back(types::Move(from, left, 0));
+        }
 
 
         if (left % 8 != 7 && opp_occupancy.is_bitset(right))
-            moves.push_back(right);
+        {
+            moves.push_back(types::Move(from, right, 0));
+        }
 
 
         if (up < 64 && !our_occupancy.is_bitset(up) && !opp_occupancy.is_bitset(up))
-            moves.push_back(right);
+        {
+            moves.push_back(types::Move(from, up, 0));
+        }
     }
 
     return moves;
 }
 
 // generate rook moves
-std::vector<uint8_t> rook_moves(const uint8_t square, uint8_t color, const Position& pos) {
-    assert(square < 64 && square >= 0);
+std::vector<types::Move> rook_moves(const types::Square square, types::Color color, const position::Position& pos) {
+    assert(square < types::Square::h8 && square >= types::Square::a1);
 
-    std::vector<uint8_t> moves;
+    const int                from = static_cast<int>(square);
+    std::vector<types::Move> moves;
 
     // get occupancies
-    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
+    board::Bitboard our_occupancy = color == types::Color::WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    board::Bitboard opp_occupancy = color == types::Color::BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
     // generate forward moves
-    for (uint8_t up = square + 8; up < 64; up += 8)
+    for (unsigned int up = from + 8; up < 64; up += 8)
     {
         if (our_occupancy.is_bitset(up))
+        {
             break;
+        }
 
         if (opp_occupancy.is_bitset(up))
         {
-            moves.push_back(up);
+            moves.push_back(types::Move(from, up, 0));
             break;
         }
 
-        moves.push_back(up);
+        moves.push_back(types::Move(from, up, 0));
     }
 
     // generate backward moves
-    for (uint8_t down = square - 8; down >= 0; down -= 8)
+    for (unsigned int down = from - 8; down >= 0; down -= 8)
     {
         if (our_occupancy.is_bitset(down))
+        {
             break;
+        }
 
         if (opp_occupancy.is_bitset(down))
         {
-            moves.push_back(down);
+            moves.push_back(types::Move(from, down, 0));
             break;
         }
 
-        moves.push_back(down);
+        moves.push_back(types::Move(from, down, 0));
     }
 
     // generate moves to the left
-    for (uint8_t left = square - 1; left >= 0 && (left + 1) % 8 != 0; left--)
+    for (unsigned int left = from - 1; left >= 0 && (left + 1) % 8 != 0; left--)
     {
         if (our_occupancy.is_bitset(left))
+        {
             break;
+        }
 
         if (opp_occupancy.is_bitset(left))
         {
-            moves.push_back(left);
+            moves.push_back(types::Move(from, left, 0));
             break;
         }
 
-        moves.push_back(left);
+        moves.push_back(types::Move(from, left, 0));
     }
 
     // generate moves to the right
-    for (uint8_t right = square + 1; right < 64 && right % 8 != 0; right++)
+    for (unsigned int right = from + 1; right < 64 && right % 8 != 0; right++)
     {
         if (our_occupancy.is_bitset(right))
-            break;
-
-        if (opp_occupancy.is_bitset(right))
         {
-            moves.push_back(right);
             break;
         }
 
-        moves.push_back(right);
+        if (opp_occupancy.is_bitset(right))
+        {
+            moves.push_back(types::Move(from, right, 0));
+            break;
+        }
+
+        moves.push_back(types::Move(from, right, 0));
     }
 
     return moves;
 }
 
 // generate bishop moves
-std::vector<uint8_t> bishop_moves(const uint8_t square, uint8_t color, const Position& pos) {
-    assert(square < 64 && square >= 0);
+std::vector<types::Move> bishop_moves(const types::Square square, types::Color color, const position::Position& pos) {
+    assert(square < types::Square::h8 && square >= types::Square::a1);
 
-    std::vector<uint8_t> moves;
+    const int                from = static_cast<int>(square);
+    std::vector<types::Move> moves;
 
     // get occupancies
-    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-    Bitboard opp_occupancy = color == BLACK ? pos._black_occupancy() : pos._white_occupancy();
+    board::Bitboard our_occupancy = color == types::Color::WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    board::Bitboard opp_occupancy = color == types::Color::BLACK ? pos._black_occupancy() : pos._white_occupancy();
 
     // generate moves in the top right side
-    for (uint8_t top_right = square + 9; top_right < 64 && (top_right % 8) != 0; top_right += 9)
+    for (unsigned int top_right = from + 9; top_right < 64 && (top_right % 8) != 0; top_right += 9)
     {
         if (our_occupancy.is_bitset(top_right))
+        {
             break;
+        }
 
         if (opp_occupancy.is_bitset(top_right))
         {
-            moves.push_back(top_right);
+            moves.push_back(types::Move(from, top_right, 0));
             break;
         }
 
-        moves.push_back(top_right);
+        moves.push_back(types::Move(from, top_right, 0));
     }
 
     // generate moves in the bottom left side
-    for (uint8_t bottom_left = square - 9; bottom_left >= 0 && ((bottom_left + 1) % 8) != 0;
-         bottom_left -= 9)
+    for (unsigned int bottom_left = from - 9; bottom_left >= 0 && ((bottom_left + 1) % 8) != 0; bottom_left -= 9)
     {
         if (our_occupancy.is_bitset(bottom_left))
+        {
             break;
+        }
 
         if (opp_occupancy.is_bitset(bottom_left))
         {
-            moves.push_back(bottom_left);
+            moves.push_back(types::Move(from, bottom_left, 0));
             break;
         }
 
-        moves.push_back(bottom_left);
+        moves.push_back(types::Move(from, bottom_left, 0));
     }
 
     // generate moves in the top left side
-    for (uint8_t top_left = square + 7; top_left < 64 && ((top_left + 1) % 8) != 0; top_left += 7)
+    for (unsigned int top_left = from + 7; top_left < 64 && ((top_left + 1) % 8) != 0; top_left += 7)
     {
 
         if (our_occupancy.is_bitset(top_left))
+        {
             break;
+        }
 
         if (opp_occupancy.is_bitset(top_left))
         {
-            moves.push_back(top_left);
+            moves.push_back(types::Move(from, top_left, 0));
             break;
         }
 
-        moves.push_back(top_left);
+        moves.push_back(types::Move(from, top_left, 0));
     }
 
     // generate moves in the bottom right side
-    for (uint8_t bottom_right = square - 7; bottom_right >= 0 && (bottom_right % 8) != 0;
-         bottom_right -= 7)
+    for (unsigned int bottom_right = from - 7; bottom_right >= 0 && (bottom_right % 8) != 0; bottom_right -= 7)
     {
         if (our_occupancy.is_bitset(bottom_right))
-            break;
-
-        if (our_occupancy.is_bitset(bottom_right))
         {
-            moves.push_back(bottom_right);
             break;
         }
 
-        moves.push_back(bottom_right);
+        if (our_occupancy.is_bitset(bottom_right))
+        {
+            moves.push_back(types::Move(from, bottom_right, 0));
+            break;
+        }
+
+        moves.push_back(types::Move(from, bottom_right, 0));
     }
 
     return moves;
@@ -273,20 +336,25 @@ std::vector<uint8_t> bishop_moves(const uint8_t square, uint8_t color, const Pos
 // generate queen moves queen moves are actualy a combination of rook
 // moves and bishop moves, so all that we're doing here is
 // merging both from the previously implemented methods
-std::vector<uint8_t> queen_moves(const uint8_t square, const uint8_t color, const Position& pos) {
-    assert(pos.pieceOn(square) == QUEEN);
+std::vector<types::Move> queen_moves(const types::Square square, const types::Color color,
+                                     const position::Position& pos) {
+    assert(pos.pieceOn(square) == types::PieceType::QUEEN);
 
-    std::vector<uint8_t> moves;
-    std::vector<uint8_t> b = bishop_moves(square, color, pos);
-    std::vector<uint8_t> r = bishop_moves(square, color, pos);
+    std::vector<types::Move> moves;
+    std::vector<types::Move> b = bishop_moves(square, color, pos);
+    std::vector<types::Move> r = bishop_moves(square, color, pos);
 
     moves.reserve(b.size() + r.size());
 
-    for (uint8_t i = 0, n = b.size(); i < n; i++)
+    for (std::size_t i = 0, n = b.size(); i < n; i++)
+    {
         moves[i] = b[i];
+    }
 
-    for (uint8_t i = b.size(), n = b.size() + r.size(), k = 0; i < n && k < r.size(); i++)
+    for (std::size_t i = b.size(), n = b.size() + r.size(), k = 0; i < n && k < r.size(); i++)
+    {
         moves[i] = r[k++];
+    }
 
     return moves;
 }
@@ -294,19 +362,18 @@ std::vector<uint8_t> queen_moves(const uint8_t square, const uint8_t color, cons
 // generate knight moves knight moves are tricky to explain to
 // even humans, but we can just use a constanqwdt map relative to the
 //  given piece position and ignore the pieces which we jumped over
-std::vector<uint8_t> knight_moves(const uint8_t square, uint8_t color, const Position& pos) {
-    assert(square < 64 && square >= 0);
-    assert(pos.pieceOn(square) == KNIGHT);
+std::vector<types::Move> knight_moves(const types::Square square, types::Color color, const position::Position& pos) {
+    assert(square < types::Square::h8 && square >= types::Square::a1);
+    assert(pos.pieceOn(square) == types::PieceType::KNIGHT);
 
-    std::vector<uint8_t> moves;
+    int                      from = static_cast<int>(square);
+    std::vector<types::Move> moves;
 
-    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    board::Bitboard our_occupancy = color == types::Color::WHITE ? pos._white_occupancy() : pos._black_occupancy();
 
-    int8_t knight_moves[8][2] = {{-2, 1}, {-2, -1}, {2, 1}, {2, -1},
-                                 {-1, 2}, {-1, -2}, {1, 2}, {1, -2}};
-
-    uint8_t start_file = square % 8;
-    uint8_t start_rank = square / 8;
+    int          knight_moves[8][2] = {{-2, 1}, {-2, -1}, {2, 1}, {2, -1}, {-1, 2}, {-1, -2}, {1, 2}, {1, -2}};
+    unsigned int start_file         = from % 8;
+    unsigned int start_rank         = from / 8;
 
     for (const auto& move : knight_moves)
     {
@@ -318,9 +385,11 @@ std::vector<uint8_t> knight_moves(const uint8_t square, uint8_t color, const Pos
             int new_pos = new_rank * 8 + new_file;
 
             if (our_occupancy.is_bitset(new_pos))
+            {
                 break;
+            }
 
-            moves.push_back(new_pos);
+            moves.push_back(types::Move(from, new_pos, 0));
         }
     }
 
@@ -328,64 +397,79 @@ std::vector<uint8_t> knight_moves(const uint8_t square, uint8_t color, const Pos
 }
 
 // generate king moves
-std::vector<uint8_t> king_moves(const uint8_t square, uint8_t color, const Position& pos) {
+std::vector<types::Move> king_moves(const types::Square square, types::Color color, const position::Position& pos) {
     // asserts
-    assert(square < 64 && square >= 0);
-    assert(pos.pieceOn(square) == KING);
+    assert(square < types::Square::h8 && square >= types::Square::a1);
+    assert(pos.pieceOn(square) == types::PieceType::KING);
 
-    std::vector<uint8_t> moves;
+    int                      from = static_cast<int>(square);
+    std::vector<types::Move> moves;
 
     // get occupancies
-    Bitboard our_occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    board::Bitboard our_occupancy = color == types::Color::WHITE ? pos._white_occupancy() : pos._black_occupancy();
 
     // moves of 1 square in every direction
-    uint8_t bottom_right = square - 7;
-    uint8_t top_left     = square + 7;
-    uint8_t bottom_left  = square - 9;
-    uint8_t top_right    = square + 9;
-    uint8_t up           = square + 8;
-    uint8_t down         = square - 8;
-    uint8_t left         = square - 1;
-    uint8_t right        = square + 1;
+    uint8_t bottom_right = from - 7;
+    uint8_t top_left     = from + 7;
+    uint8_t bottom_left  = from - 9;
+    uint8_t top_right    = from + 9;
+    uint8_t up           = from + 8;
+    uint8_t down         = from - 8;
+    uint8_t left         = from - 1;
+    uint8_t right        = from + 1;
 
     // checking boundaries and occupancies for validation
 
-    if ((bottom_left >= 0 && ((bottom_left + 1) % 8) != 0)
-        && !(our_occupancy.is_bitset(bottom_left)))
+    if ((bottom_left >= 0 && ((bottom_left + 1) % 8) != 0) && !(our_occupancy.is_bitset(bottom_left)))
+    {
         moves.push_back(bottom_left);
+    }
 
     if ((bottom_right >= 0 && (bottom_right % 8) != 0) && !(our_occupancy.is_bitset(bottom_right)))
+    {
         moves.push_back(bottom_right);
+    }
 
     if ((top_left < 64 && (top_left + 1) % 8 != 0) && !(our_occupancy.is_bitset(top_left)))
+    {
         moves.push_back(top_left);
+    }
 
     if ((top_right < 64 && (top_right + 1) % 8 != 0) && !(our_occupancy.is_bitset(top_right)))
+    {
         moves.push_back(top_right);
+    }
 
     if (up < 64 && !(our_occupancy.is_bitset(up)))
+    {
         moves.push_back(up);
+    }
 
     if (down >= 0 && !(our_occupancy.is_bitset(down)))
+    {
         moves.push_back(down);
+    }
 
     if ((left >= 0 && (left + 1) % 8 != 0) && !(our_occupancy.is_bitset(left)))
+    {
         moves.push_back(left);
+    }
 
     if ((right < 64 && right % 8 != 0) && !(our_occupancy.is_bitset(right)))
+    {
         moves.push_back(right);
+    }
 
     return moves;
 }
 
 // generate all the possible pseudo moves of a side in a board
-std::vector<Move> generate_all_moves(const Position& pos, uint8_t color) {
-    assert(color == WHITE || color == BLACK);
+std::vector<types::Move> generate_all_moves(const position::Position& pos, types::Color color) {
+    assert(color == types::Color::WHITE || color == types::Color::BLACK);
 
     // get occupancies
-    Bitboard occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-
-    std::vector<Move> total;  // ret container
+    board::Bitboard          occupancy = color == types::Color::WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    std::vector<types::Move> total;  // ret container
 
     // loop for each square on the board
     for (uint8_t square = 0; square < 64; square++)
@@ -393,35 +477,37 @@ std::vector<Move> generate_all_moves(const Position& pos, uint8_t color) {
         // if there is a piece on that square
         if (occupancy.is_bitset(square))
         {
-            pieceType piece_type = pos.pieceOn(square);
+            types::PieceType piece_type = pos.pieceOn(square);
 
             // just in case
-            if (piece_type == NOPE)
+            if (piece_type == types::PieceType::NOPE)
+            {
                 continue;
+            }
 
             // possible destinations container
-            std::vector<uint8_t> to_squares;
+            std::vector<types::Move> to_squares;
 
             // we don't know what's the actual piece type and we don't wanna know
             switch (piece_type)
             {
-            case PAWN :
-                to_squares = pawn_moves(square, color, pos);
+            case types::PieceType::PAWN :
+                to_squares = pawn_moves(static_cast<types::Square>(square), color, pos);
                 break;
-            case KNIGHT :
-                to_squares = king_moves(square, color, pos);
+            case types::PieceType::KNIGHT :
+                to_squares = king_moves(static_cast<types::Square>(square), color, pos);
                 break;
-            case BISHOP :
-                to_squares = bishop_moves(square, color, pos);
+            case types::PieceType::BISHOP :
+                to_squares = bishop_moves(static_cast<types::Square>(square), color, pos);
                 break;
-            case ROOK :
-                to_squares = rook_moves(square, color, pos);
+            case types::PieceType::ROOK :
+                to_squares = rook_moves(static_cast<types::Square>(square), color, pos);
                 break;
-            case QUEEN :
-                to_squares = queen_moves(square, color, pos);
+            case types::PieceType::QUEEN :
+                to_squares = queen_moves(static_cast<types::Square>(square), color, pos);
                 break;
-            case KING :
-                to_squares = king_moves(square, color, pos);
+            case types::PieceType::KING :
+                to_squares = king_moves(static_cast<types::Square>(square), color, pos);
                 break;
 
             default :
@@ -430,20 +516,9 @@ std::vector<Move> generate_all_moves(const Position& pos, uint8_t color) {
 
             // if no moves have been found for the current piece
             if (to_squares.empty())
-                continue;
-
-            std::vector<Move> moves;  // temp
-
-            // add the moves to the list
-            for (uint8_t i = 0, n = to_squares.size(); i < n; i++)
             {
-                Move m = Move(square, to_squares[i], Quiet);
-                moves.push_back(m);
+                continue;
             }
-
-            // add the list to the return vector
-            for (Move m : moves)
-                total.push_back(m);
         }
     }
 
@@ -452,20 +527,22 @@ std::vector<Move> generate_all_moves(const Position& pos, uint8_t color) {
 
 // gets the squares on which the given piece type resides
 // useful when we don't know which squares we're dealing with
-std::vector<uint8_t> piece_squares(pieceType piece_type, const Position& pos) {
-    if (piece_type == NOPE)
-        return {};
+std::vector<types::Square> piece_squares(types::PieceType piece_type, const position::Position& pos) {
+    if (piece_type == types::PieceType::NOPE){
+        return {};}
 
     // assert a valid piece type
-    assert(piece_type <= NOPE && piece_type >= KING);
+    assert(piece_type <= types::PieceType::NOPE && piece_type >= types::PieceType::KING);
 
-    std::vector<uint8_t> ans;
+    std::vector<types::Square> ans;
 
     // look for the piece and get it's square if found
-    for (uint8_t sq = 0; sq < 64; sq++)
+    for (unsigned int sq = 0; sq < 64; sq++)
     {
         if (pos.pieces[sq] == piece_type)
-            ans.push_back(sq);
+        {
+            ans.push_back(types::Square(sq));
+        }
     }
 
     return ans;
@@ -473,47 +550,51 @@ std::vector<uint8_t> piece_squares(pieceType piece_type, const Position& pos) {
 
 // sets a bitboard of the attacked squares in a
 // given position by the opposite color
-void setAttackedSquares(Position& pos) {
+void setAttackedSquares(position::Position& pos) {
     // position data
-    uint8_t                    color        = pos.getSide();
+    types::Color               color = pos.getSide();
     std::unordered_set<int8_t> total_access;  // ret container
 
     // lambda kinda function that adds a move to the list of accessed squares
-    auto add_moves = [&total_access](const std::vector<uint8_t>& moves) {
-        for (uint8_t move : moves)
-            total_access.insert(move);
+    auto add_moves = [&total_access](const std::vector<types::Move>& moves) {
+        for (auto move : moves)
+        {
+            total_access.insert(move.getTo());
+        }
     };
 
     // also for each square in the board
-    for (const pieceType piece : pos.pieces)
+    for (const types::PieceType piece : pos.pieces)
     {
-        std::vector<uint8_t> piece_sq = piece_squares(piece, pos);
+        std::vector<types::Square> piece_sq = piece_squares(piece, pos);
 
         if (piece_sq.empty())
-            continue;
-
-        for (const uint8_t sq : piece_sq)
         {
-            std::vector<uint8_t> access;
+            continue;
+        }
+
+        for (const auto sq : piece_sq)
+        {
+            std::vector<types::Move> access;
 
             switch (piece)
             {
-            case PAWN :
+            case types::PieceType::PAWN :
                 access = pawn_moves(sq, color, pos);
                 break;
-            case KNIGHT :
+            case types::PieceType::KNIGHT :
                 access = knight_moves(sq, color, pos);
                 break;
-            case BISHOP :
+            case types::PieceType::BISHOP :
                 access = bishop_moves(sq, color, pos);
                 break;
-            case ROOK :
+            case types::PieceType::ROOK :
                 access = bishop_moves(sq, color, pos);
                 break;
-            case QUEEN :
+            case types::PieceType::QUEEN :
                 access = queen_moves(sq, color, pos);
                 break;
-            case KING :
+            case types::PieceType::KING :
                 access = king_moves(sq, color, pos);
                 break;
 
@@ -528,200 +609,256 @@ void setAttackedSquares(Position& pos) {
     // set the bitboard / boolean array
     for (uint8_t sq = 0; sq < 64; sq++)
     {
-        color == WHITE ? pos.attacked_black[sq] = (total_access.find(sq) != total_access.end())
-                       : pos.attacked_white[sq] = (total_access.find(sq) != total_access.end());
+        color == types::Color::WHITE ? pos.attacked_black[sq] = (total_access.find(sq) != total_access.end())
+                                     : pos.attacked_white[sq] = (total_access.find(sq) != total_access.end());
     }
 }
 
 // is the given move a capture
-bool is_tactical(const Move& _move) { return (_move.getFlags() == CAPTURE); }
+bool is_tactical(const types::Move& _move) { return (_move.getFlags() == static_cast<int>(types::MoveType::CAPTURE)); }
 
 // pseudo legality checks inspired by stockfish
-bool isPseudoLegal(const Position& pos, const Move& move) {
+bool isPseudoLegal(const position::Position& pos, const types::Move& move) {
     // data about the position and the given move
-    uint8_t       from        = move.getFrom();
-    uint8_t       to          = move.getTo();
-    uint8_t       _flag       = move.getFlags();
-    uint8_t       _move_color = pos.getColor(from);
-    const uint8_t color       = pos.getSide();
-    pieceType     moved_piece = pos.pieceOn(from);
-    Bitboard      occupancy   = pos.occupancy();
-    Bitboard      our_occ     = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    types::Square      from        = types::Square(move.getFrom());
+    types::Square      to          = types::Square(move.getTo());
+    types::MoveType    flag        = types::MoveType(move.getFlags());
+    types::Color       move_color  = types::Color(pos.getColor(from));
+    const types::Color color       = pos.getSide();
+    types::PieceType   moved_piece = pos.pieceOn(from);
+    board::Bitboard    occupancy   = pos.occupancy();
+    board::Bitboard    our_occ     = color == types::Color::WHITE ? pos._white_occupancy() : pos._black_occupancy();
 
     // asserts
-    assert(from < 64 && from >= 0);
-    assert(to < 64 && to >= 0);
+    assert(from < types::Square::h8 && from >= types::Square::a1);
+    assert(to < types::Square::h8 && to >= types::Square::a1);
 
     // if the move has the valid format
     if (!move.is_ok())
+    {
         return false;
+    }
 
     // if the destination is occupied by us
     if (our_occ.is_bitset(to) == true)
+    {
         return false;
+    }
 
     // no one moves twice
-    if (color != _move_color)
+    if (color != move_color)
+    {
         return false;
+    }
 
     // no void moves
-    if (pos.pieceOn(from) == NOPE)
+    if (pos.pieceOn(from) == types::PieceType::NOPE)
+    {
         return false;
+    }
 
     // can't move to the same square you're in
     if (from == to)
+    {
         return false;
+    }
 
     // can't move a void piece
-    if (moved_piece == NOPE)
+    if (moved_piece == types::PieceType::NOPE)
+    {
         return false;
+    }
 
     // can't casle with no king
-    if ((_flag == KSCastle || _flag == QSCastle) && moved_piece != KING)
+    if ((flag == types::MoveType::KSCASTLE || flag == types::MoveType::QSCASTLE)
+        && moved_piece != types::PieceType::KING)
+    {
         return false;
+    }
 
     // can't en passant with no pawn
-    if (_flag == EN_PASSANT && moved_piece != PAWN)
+    if (flag == types::MoveType::EN_PASSANT && moved_piece != types::PieceType::PAWN)
+    {
         return false;
+    }
 
     // the destination sqaure in en passant should always be empty
-    if (_flag == EN_PASSANT && pos.pieceOn(to) != NOPE)
+    if (flag == types::MoveType::EN_PASSANT && pos.pieceOn(to) != types::PieceType::NOPE)
+    {
         return false;
+    }
 
     // can't capture on an empty square
-    if (_flag == Capture && pos.pieceOn(to) == NOPE)
+    if (flag == types::MoveType::QUIET && pos.pieceOn(to) == types::PieceType::NOPE)
+    {
         return false;
+    }
 
     // can't promote with no pawn
-    if ((_flag == Promo || _flag == enPassant) && moved_piece != PAWN)
+    if ((flag == types::MoveType::PROMOTION || flag == types::MoveType::EN_PASSANT)
+        && moved_piece != types::PieceType::PAWN)
+    {
         return false;
+    }
 
-    const uint8_t NORTH = (color == WHITE) ? -8 : 8;  // set north fot simplicity
+    const uint8_t NORTH = (color == types::Color::WHITE) ? -8 : 8;  // set north for simplicity
 
     switch (moved_piece)
     {
-    case PAWN : {
+    case types::PieceType::PAWN : {
         // generate all the possible moves
-        std::vector<uint8_t> moves = pawn_moves(from, color, pos);
+        std::vector<types::Move> moves = pawn_moves(from, color, pos);
         // the given moves should always exist in this list
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
+        {
             return false;
+        }
 
         // additional checks for robustness
-        if (_flag == EN_PASSANT)
+        if (flag == types::MoveType::EN_PASSANT)
         {
-            if (color == WHITE && to != (from + NORTH))
+            if (color == types::Color::WHITE && to != types::Square(static_cast<int>(from) + NORTH))
+            {
                 return false;
+            }
 
-            if (color == BLACK && to != (from - NORTH))
+            if (color == types::Color::BLACK && to != types::Square(static_cast<int>(from) - NORTH))
+            {
                 return false;
+            }
         }
-        else if (_flag == Capture && pos.pieceOn(to) == NOPE)
+        else if (flag == types::MoveType::CAPTURE && pos.pieceOn(to) == types::PieceType::NOPE)
         {
             return false;
         }
-        else if (_flag == Promo)
+        else if (flag == types::MoveType::PROMOTION)
         {
-            if (color == WHITE ? ranks[from] != 6 : ranks[from] != 1)
+            if (color == types::Color::WHITE ? types::ranks[(int) (from)] != 6 : types::ranks[(int) (from)] != 1)
+            {
                 return false;
+            }
 
-            if (color == WHITE ? ranks[to] != 7 : ranks[to] != 1)
+            if (color == types::Color::WHITE ? types::ranks[(int) (to)] != 7 : types::ranks[(int) (to)] != 1)
+            {
                 return false;
+            }
         }
         else
         {
-            if (color == WHITE && ranks[from] >= 1 && ranks[from] < 6 && ranks[from] >= ranks[to])
+            if (color == types::Color::WHITE && types::ranks[(int) (from)] >= 1 && types::ranks[(int) (from)] < 6
+                && types::ranks[(int) (from)] >= types::ranks[(int) (to)])
+            {
                 return false;
+            }
 
-            if (color == BLACK && ranks[from] >= 6 && ranks[from] < 1 && ranks[from] <= ranks[to])
+            if (color == types::Color::BLACK && types::ranks[(int) (from)] >= 6 && types::ranks[(int) (from)] < 1
+                && types::ranks[(int) (from)] <= types::ranks[(int) (to)])
+            {
                 return false;
+            }
         }
     }
     break;
 
     // almost the same with the rest of the pieces but with some slight
     // differences based on the move type
-    case KNIGHT : {
-        std::vector<uint8_t> moves = knight_moves(from, color, pos);
+    case types::PieceType::KNIGHT : {
+        std::vector<types::Move> moves = knight_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
+        {
             return false;
+        }
     }
     break;
 
-    case BISHOP : {
-        std::vector<uint8_t> moves = bishop_moves(from, color, pos);
+    case types::PieceType::BISHOP : {
+        std::vector<types::Move> moves = bishop_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
+        {
             return false;
+        }
     }
     break;
 
-    case ROOK : {
-        std::vector<uint8_t> moves = rook_moves(from, color, pos);
+    case types::PieceType::ROOK : {
+        std::vector<types::Move> moves = rook_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
+        {
             return false;
+        }
     }
     break;
 
-    case QUEEN : {
-        std::vector<uint8_t> moves = queen_moves(from, color, pos);
+    case types::PieceType::QUEEN : {
+        std::vector<types::Move> moves = queen_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
+        {
             return false;
+        }
     }
     break;
 
-    case KING : {
+    case types::PieceType::KING : {
         if (pos.isAttacked(to, color))
+        {
             return false;
+        }
 
-        if (_flag == KSCastle)
+        if (flag == types::MoveType::KSCASTLE)
         {
-            if (color == WHITE)
+            if (color == types::Color::WHITE)
             {
-                if (occupancy.is_bitset(f1) || occupancy.is_bitset(g1) || pos.isAttacked(f1, WHITE)
-                    || pos.isAttacked(g1, WHITE))
+                if (occupancy.is_bitset(types::Square::f1) || occupancy.is_bitset(types::Square::g1)
+                    || pos.isAttacked(types::Square::f1, types::Color::WHITE)
+                    || pos.isAttacked(types::Square::g1, types::Color::WHITE))
                 {
                     return false;
                 }
             }
             else
             {
-                if (occupancy.is_bitset(f8) || occupancy.is_bitset(g8) || pos.isAttacked(f8, BLACK)
-                    || pos.isAttacked(g8, BLACK))
+                if (occupancy.is_bitset(types::Square::f8) || occupancy.is_bitset(types::Square::g8)
+                    || pos.isAttacked(types::Square::f8, types::Color::BLACK)
+                    || pos.isAttacked(types::Square::g8, types::Color::BLACK))
                 {
                     return false;
                 }
             }
         }
-        else if (_flag == QSCastle)
+        else if (flag == types::MoveType::QSCASTLE)
         {
-            if (color == WHITE)
+            if (color == types::Color::WHITE)
             {
-                if (occupancy.is_bitset(d1) || occupancy.is_bitset(c1) || occupancy.is_bitset(b1)
-                    || pos.isAttacked(d1, WHITE) || pos.isAttacked(c1, WHITE)
-                    || pos.isAttacked(b1, WHITE))
+                if (occupancy.is_bitset(types::Square::d1) || occupancy.is_bitset(types::Square::c1)
+                    || occupancy.is_bitset(types::Square::b1) || pos.isAttacked(types::Square::d1, types::Color::WHITE)
+                    || pos.isAttacked(types::Square::c1, types::Color::WHITE)
+                    || pos.isAttacked(types::Square::b1, types::Color::WHITE))
                 {
                     return false;
                 }
             }
             else
             {
-                if (occupancy.is_bitset(d8) || occupancy.is_bitset(c8) || occupancy.is_bitset(b8)
-                    || pos.isAttacked(d8, BLACK) || pos.isAttacked(c8, BLACK)
-                    || pos.isAttacked(b8, BLACK))
+                if (occupancy.is_bitset(types::Square::d8) || occupancy.is_bitset(types::Square::c8)
+                    || occupancy.is_bitset(types::Square::b8) || pos.isAttacked(types::Square::d8, types::Color::BLACK)
+                    || pos.isAttacked(types::Square::c8, types::Color::BLACK)
+                    || pos.isAttacked(types::Square::b8, types::Color::BLACK))
                 {
                     return false;
                 }
             }
         }
 
-        std::vector<uint8_t> moves = king_moves(from, color, pos);
+        std::vector<types::Move> moves = king_moves(from, color, pos);
 
         if (std::find(moves.begin(), moves.end(), to) == moves.end())
+        {
             return false;
+        }
     }
     break;
 
@@ -733,71 +870,87 @@ bool isPseudoLegal(const Position& pos, const Move& move) {
 }
 
 // gets the bitboard of the opponent pieces attacked by the given piece
-Bitboard get_piece_attacks(const Position& pos, uint8_t square) {
-    pieceType piece = pos.pieceOn(square);
+board::Bitboard get_piece_attacks(const position::Position& pos, types::Square square) {
+    types::PieceType piece = pos.pieceOn(square);
 
-    if (piece == NOPE)
-        return Bitboard(0ULL);
+    if (piece == types::PieceType::NOPE)
+    {
+        return board::Bitboard(0ULL);
+    }
 
     // typical data
-    uint8_t              side   = pos.getColor(square);
-    Bitboard             occ    = side == WHITE ? pos._black_occupancy() : pos._white_occupancy();
-    Bitboard             result = Bitboard(0ULL);
-    std::vector<uint8_t> moves  = rook_moves(square, side, pos);
+    types::Color             side   = pos.getColor(square);
+    board::Bitboard          occ    = side == types::Color::WHITE ? pos._black_occupancy() : pos._white_occupancy();
+    board::Bitboard          result = board::Bitboard(0ULL);
+    std::vector<types::Move> moves  = rook_moves(square, side, pos);
 
     // if no moves for the given piece then return a 0 bitboard
     if (moves.empty())
-        return Bitboard(0ULL);
+    {
+        return board::Bitboard(0ULL);
+    }
 
     // fetch the result in brute force
-    for (const int8_t m : moves)
+    for (const auto m : moves)
     {
-        if (occ.is_bitset(m))
-            result.set_bit(m);
+        if (occ.is_bitset(m.getTo()))
+        {
+            result.set_bit(m.getTo());
+        }
     }
 
     return result;
 }
 
 // is a given move strictly legal
-bool isLegal(const Position& pos, const Move& move) {
+bool isLegal(const position::Position& pos, const types::Move& move) {
     // metadata
-    uint8_t   color = pos.getSide();
-    uint8_t   _flag = move.getFlags();
-    uint8_t   from  = move.getFrom();
-    uint8_t   to    = move.getTo();
-    pieceType piece = pos.pieceOn(from);
+    types::Color     color = pos.getSide();
+    types::MoveType  flag  = types::MoveType(move.getFlags());
+    types::Square    from  = types::Square(move.getFrom());
+    types::Square    to    = types::Square(move.getTo());
+    types::PieceType piece = pos.pieceOn(from);
 
     // asserts
     assert(color == pos.getColor(from));
-    assert(from < 64 && from >= 0);
-    assert(to < 64 && to >= 0);
+    assert(from < types::Square::h8 && from >= types::Square::a1);
+    assert(to < types::Square::h8 && to >= types::Square::a1);
 
     // all seen before
-    if (_flag != Capture && pos.pieceOn(to) != NOPE)
-        return false;
-
-    if (piece == KING)
+    if (flag != types::MoveType::CAPTURE && pos.pieceOn(to) != types::PieceType::NOPE)
     {
-        if (_flag == KSCastle)
+        return false;
+    }
+
+    if (piece == types::PieceType::KING)
+    {
+        if (flag == types::MoveType::KSCASTLE)
         {
-            return !pos.isAttacked(color == WHITE ? f1 : f8, color)
-                && !pos.isAttacked(color == WHITE ? g1 : g8, color);
+            return !pos.isAttacked(color == types::Color::WHITE ? types::Square::f1 : types::Square::f8, color)
+                && !pos.isAttacked(color == types::Color::WHITE ? types::Square::g1 : types::Square::g8, color);
         }
 
-        if (_flag == QSCastle)
+        if (flag == types::MoveType::QSCASTLE)
         {
-            return !pos.isAttacked(color == WHITE ? b1 : b8, color)
-                && !pos.isAttacked(color == WHITE ? c1 : c8, color)
-                && !pos.isAttacked(color == WHITE ? d1 : d8, color);
+            return !pos.isAttacked(color == types::Color::WHITE ? types::Square::b1 : types::Square::b8, color)
+                && !pos.isAttacked(color == types::Color::WHITE ? types::Square::c1 : types::Square::c8, color)
+                && !pos.isAttacked(color == types::Color::WHITE ? types::Square::d1 : types::Square::d8, color);
         }
 
         if (pos.isAttacked(to, color))
+        {
             return false;
+        }
     }
 
-    if (pos.isPinned(from))
+    if (pos.isPinned(from) != types::Square::NONE)
+    {
         return false;
+    }
 
     return true;
 }
+
+
+}  // namespace movegen
+}  // namespace Shahrazad
