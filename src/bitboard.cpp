@@ -1,14 +1,17 @@
 #include "bitboard.h"
 #include <iostream>
 
-void Bitboard::set_bit(const uint8_t& pos) { bit_board |= (MASK << pos); }
 
-void Bitboard::flip_bit(const uint8_t& pos) { bit_board ^= (MASK << pos); }
+namespace Shahrazad {
+namespace board {
 
-void Bitboard::clear_bit(const uint8_t& pos) { bit_board &= ~(MASK << pos); }
-
-bool Bitboard::is_bitset(const uint8_t& pos) const { return (bit_board & (MASK << pos)) != 0; }
-
+void Bitboard::set_bit(const uint8_t& pos) { bit_board |= (types::MASK << pos); }
+void Bitboard::flip_bit(const uint8_t& pos) { bit_board ^= (types::MASK << pos); }
+void Bitboard::clear_bit(const uint8_t& pos) { bit_board &= ~(types::MASK << pos); }
+bool Bitboard::is_bitset(const uint8_t& pos) const { return (bit_board & (types::MASK << pos)) != 0; }
+bool Bitboard::is_bitset(const types::Square& pos) const {
+    return (bit_board & (types::MASK << static_cast<uint8_t>(pos))) != 0;
+}
 uint64_t Bitboard::board() const { return bit_board; }
 
 void Bitboard::move_bit(const uint8_t& start_pos, const uint8_t& end_pos) {
@@ -59,3 +62,6 @@ uint8_t Bitboard::count() const {
     }
     return count;
 }
+
+}  // namespace board
+}  // namespace Shahrazad
