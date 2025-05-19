@@ -6,6 +6,9 @@
 #include <vector>
 
 
+namespace Shahrazad {
+namespace nnue {
+
 /*
     This is because I am using an Apple m1 (arm64) macbook pro for this development
     If any one has the knowledge and time to develop custom gpu/cpu acceleretors for
@@ -14,24 +17,24 @@
 
 // Computes a unique key for a feature based on the position of the king, the type of piece, its square, and
 // its color.
-uint32_t feature_key(uint8_t king_square, pieceType piece_type, uint8_t square, uint8_t color) {
+uint32_t feature_key(types::Square king_square, types::PieceType piece_type, types::Square square, types::Color color) {
     // Calculate the index for the piece based on its type and color
-    int p_idx = piece_type * 2 + color;
+    int p_idx = static_cast<int>(piece_type) * 2 + static_cast<int>(color);
 
     // Compute the key by combining the piece's position, king's square, and other characteristics
-    return (square + (p_idx + king_square * 10)) * 64;
+    return (static_cast<int>(square) + (p_idx + static_cast<int>(king_square) * 10)) * 64;
 }
 
 // Retrieves a vector of active feature keys for the given position and color.
 // Features represent active pieces on the board.
-std::vector<uint32_t> get_active_features(const Position& pos, uint8_t color) {
+std::vector<uint32_t> get_active_features(const position::Position& pos, types::Color color) {
     std::vector<uint32_t> active_features;
 
     // Get the occupancy bitboard for the given color (either white or black)
-    Bitboard occupancy = color == WHITE ? pos._white_occupancy() : pos._black_occupancy();
+    board::Bitboard occupancy = color == types::Color::WHITE ? pos._white_occupancy() : pos._black_occupancy();
 
     // Loop through all squares on the board (64 squares)
-    for (uint8_t sq = 0; sq < 64; sq++)
+    for (unsigned int sq = 0; sq < 64; sq++)
     {
         // Skip if no piece is present on the current square
         if (!occupancy.is_bitset(sq))
@@ -40,7 +43,7 @@ std::vector<uint32_t> get_active_features(const Position& pos, uint8_t color) {
         }
 
         // Generate the feature key for the piece on the current square
-        uint32_t key = feature_key(pos.king_square(color), pos.pieceOn(sq), sq, color);
+        uint32_t key = feature_key(pos.king_square(color), pos.pieceOn(sq), types::Square(sq), color);
         active_features.push_back(key);
     }
 
@@ -50,8 +53,8 @@ std::vector<uint32_t> get_active_features(const Position& pos, uint8_t color) {
 
 // Retrieves a list of added features between the current and previous positions for a given color.
 // These are features that exist in the current position but were not present in the previous one.
-std::vector<uint32_t>
-get_added_features(const Position& cur_pos, const Position& prev_pos, uint8_t color) {
+std::vector<uint32_t> get_added_features(const position::Position& cur_pos, const position::Position& prev_pos,
+                                         types::Color color) {
     // Get the active features in the current and previous positions
     std::vector<uint32_t> active_features = get_active_features(cur_pos, color);
     std::vector<uint32_t> prev_features   = get_active_features(prev_pos, color);
@@ -62,8 +65,7 @@ get_added_features(const Position& cur_pos, const Position& prev_pos, uint8_t co
     // Find features that exist in the current position but not in the previous position
     for (int i = 0; i < size; i++)
     {
-        if (std::find(prev_features.begin(), prev_features.end(), active_features[i])
-            == prev_features.end())
+        if (std::find(prev_features.begin(), prev_features.end(), active_features[i]) == prev_features.end())
         {
             result.push_back(active_features[i]);
         }
@@ -75,19 +77,18 @@ get_added_features(const Position& cur_pos, const Position& prev_pos, uint8_t co
 
 // Retrieves a list of removed features between the current and previous positions for a given color.
 // These are features that existed in the previous position but are no longer present in the current one.
-std::vector<uint32_t>
-get_removed_features(const Position& cur_pos, const Position& prev_pos, uint8_t color) {
+std::vector<uint32_t> get_removed_features(const position::Position& cur_pos, const position::Position& prev_pos,
+                                           types::Color color) {
     // Get the active features in the current and previous positions
     std::vector<uint32_t> active_features = get_active_features(cur_pos, color);
     std::vector<uint32_t> prev_features   = get_active_features(prev_pos, color);
-    const int             size            = prev_features.size();
+    const std::size_t     size            = prev_features.size();
     std::vector<uint32_t> result;
 
     // Find features that existed in the previous position but no longer exist in the current one
     for (int i = 0; i < size; i++)
     {
-        if (std::find(active_features.begin(), active_features.end(), prev_features[i])
-            == active_features.end())
+        if (std::find(active_features.begin(), active_features.end(), prev_features[i]) == active_features.end())
         {
             result.push_back(prev_features[i]);
         }
@@ -205,8 +206,7 @@ std::vector<int16_t> LinearLayer::backPropagate(const std::vector<int16_t>& grad
 }
 
 // A specialized linear function for passing data through a layer in the NNue neural network model.
-std::vector<int16_t> NNue::linear(const LinearLayer&          layer,
-                                  std::vector<int16_t>&       output,
+std::vector<int16_t> NNue::linear(const LinearLayer& layer, std::vector<int16_t>& output,
                                   const std::vector<int16_t>& input) const {
     // Initialize the output vector by setting each value to the corresponding bias for the layer
     for (int i = 0; i < layer.get_num_outputs(); i++)
@@ -226,19 +226,21 @@ std::vector<int16_t> NNue::linear(const LinearLayer&          layer,
 
 
 // Applies clipped ReLU to the input: ensures values are between 0 and 1
-std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t>       output,
-                                        const std::vector<int16_t> input) const {
-    size_t size = input.size();
+std::vector<int16_t> NNue::clipped_relu(std::vector<int16_t> output, const std::vector<int16_t> input) const {
+    std::size_t size = input.size();
 
     // Apply ReLU with values clipped between 0 and 1
     for (int i = 0; i < size; i++)
-        output[i] = min(max(input[i], 0), 1);
+    {
+        output[i] = std::min(std::max(input[i], int16_t(0)), int16_t(1));
+    }
 
     return output;
 }
+
 // NNUE evaluation function to compute the score of the position
-float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) const {
-    int color = pos.getSide();  // Get the side to move
+float NNue::nnue_eval(const position::Position& pos, NNue::Accumulator<size>& caches) const {
+    types::Color color = pos.getSide();  // Get the side to move
 
     std::vector<int16_t> buffer;
     int16_t              input[2 * MAX_INPUT_SIZE];  // Input buffer for both sides
@@ -247,7 +249,7 @@ float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) cons
     for (int i = 0; i < MAX_INPUT_SIZE; i++)
     {
         input[i]                  = caches[color][i];
-        input[MAX_INPUT_SIZE + i] = caches[color ^ 1][i];
+        input[MAX_INPUT_SIZE + i] = caches[types::Color(static_cast<int>(color) ^ 1)][i];
     }
 
     std::vector<int16_t> current_output = buffer;
@@ -282,50 +284,60 @@ float NNue::nnue_eval(const Position& pos, NNue::Accumulator<size>& caches) cons
 }
 
 // Refresh accumulator by resetting it and updating with active features
-void NNue::refresh_accumulator(const LinearLayer&           layer,
-                               const std::vector<uint32_t>& active_features,
-                               uint8_t                      perspective) {
-    assert(perspective == WHITE || perspective == BLACK);
+void NNue::refresh_accumulator(const LinearLayer& layer, const std::vector<uint32_t>& active_features,
+                               types::Color perspective) {
+    assert(perspective == types::Color::WHITE || perspective == types::Color::BLACK);
 
     // Reset the cache with the layer's biases for the current side
     for (int i = 0; i < size; ++i)
+    {
         caches[perspective][i] = layer.getBias()[i];
+    }
 
     // Add contributions from each active feature
     for (uint32_t a : active_features)
     {
         for (int i = 0; i < size; ++i)
+        {
             caches[perspective][i] += layer.getWeights(a)[i];
+        }
     }
 }
 
 // Update the accumulator by removing old features and adding new ones
-void NNue::update_accumulator(const LinearLayer&           layer,
-                              const std::vector<uint32_t>& removed_features,
-                              const std::vector<uint32_t>& added_features,
-                              uint8_t                      perspective) {
+void NNue::update_accumulator(const LinearLayer& layer, const std::vector<uint32_t>& removed_features,
+                              const std::vector<uint32_t>& added_features, types::Color perspective) {
     NNue::Accumulator<size> new_acc = caches;
 
-    assert(perspective == WHITE || perspective == BLACK);
+    assert(perspective == types::Color::WHITE || perspective == types::Color::BLACK);
 
     // Initialize the accumulator with the current cache
     for (int i = 0; i < size; ++i)
+    {
         new_acc[perspective][i] = caches[perspective][i];
+    }
 
     // Subtract weights of removed features
     for (uint32_t r : removed_features)
     {
         for (int i = 0; i < size; ++i)
+        {
             new_acc[perspective][i] -= layer.getWeights(r)[i];
+        }
     }
 
     // Add weights of new added features
     for (uint32_t a : added_features)
     {
         for (int i = 0; i < size; ++i)
+        {
             new_acc[perspective][i] += layer.getWeights(a)[i];
+        }
     }
 
     // Update the cache with the new accumulator
     caches = new_acc;
 }
+
+}  // namespace nnue
+}  // namespace Shahrazad
