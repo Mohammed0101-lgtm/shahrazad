@@ -3,20 +3,27 @@
 #include "move.h"
 #include "search.h"
 
+
+namespace Shahrazad {
+namespace movepick {
+
 class Movepicker {
    public:
-    Position     pos;
-    SearchData*  search_data;
-    SearchStack* ss;
-    MoveList     move_list;
-    Move         tt_move;
-    Move         killer;
-    Move         count;
-    int          index;
-    int          stage;
+    position::Position   pos;
+    search::SearchData*  search_data;
+    search::SearchStack* ss;
+    movegen::MoveList    move_list;
+    types::Move          tt_move;
+    types::Move          killer;
+    types::Move          count;
+    int                  index;
+    int                  stage;
 
     Movepicker() = default;
 
-    Move select(Position& pos);
-    Move next(const bool skip);
+    types::Move select(position::Position& pos);
+    types::Move next(const bool skip);
 };
+
+}  // namespace movepick
+}  // namespace Shahrazad
