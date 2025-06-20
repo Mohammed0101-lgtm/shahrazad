@@ -1,9 +1,16 @@
 #pragma once
 
 #include "nnue.h"
+
 #include <cstdint>
 #include <arm_neon.h>
 
+
+#if defined(__aarch64__) || defined(__ARM_NEON)
+
+namespace Shahrazad {
+namespace nnue {
+namespace simd {
 
 using InputType  = std::int32_t;
 using OutputType = std::uint8_t;
@@ -78,14 +85,14 @@ linear(const LinearLayer& layer, std::vector<int16_t>& output, const std::vector
         for (int j = 0; j < num_input_subsets; ++j)
         {
             // Load input data into a 128-bit vector register
-            int8x16_t in = vld1q_s8(&input[j * register_width]);
+            int8x16_t in = vld1q_s8(reinterpret_cast<const int8_t*>(input.data() + j * register_width));
             // Load weights for the current input subset
             const int16_t* weight_ptr = layer.getWeights(offset + j * register_width);
             // Multiply-accumulate input data with weights for each output neuron
             sum0 =
-              vmlal_s8(sum0, vget_low_s8(in), vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr)));
+              vmlal_s8(sum0, vget_low_s8(in), vld1q_s8(reinterpret_cast<const int8_t*>(weight_ptr)));
             sum1 = vmlal_s8(sum1, vget_low_s8(in),
-                            vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + register_width)));
+                            vld1q_s8(reinterpret_cast<const int8_t*>(weight_ptr + register_width)));
             sum2 =
               vmlal_s8(sum2, vget_low_s8(in),
                        vld1_s8(reinterpret_cast<const int8_t*>(weight_ptr + 2 * register_width)));
@@ -119,7 +126,7 @@ std::vector<int16_t> clipped_relu(std::vector<int16_t> output, const std::vector
     int16x8_t one  = vdupq_n_s16(1);  // Vector of ones
 
     // Process 8 elements at a time using SIMD instructions
-    for (size_t i = 0; i < size; i += 8)
+    for (std::size_t i = 0; i < size; i += 8)
     {
         int16x8_t input_vec = vld1q_s16(&input[i]);  // Load 8 values from input
         int16x8_t clipped =
@@ -196,3 +203,10 @@ void update_accumulator(const LinearLayer&             layer,
     for (int i = 0; i < subSets_number; i++)
         vst1q_s64(&new_acc[side][i * register_width], regs[i]);
 }
+
+#endif // End of SIMD code for Apple M1 (ARM64)
+
+}  // namespace simd
+}  // namespace nnue
+}  // namespace Shahrazad
+
