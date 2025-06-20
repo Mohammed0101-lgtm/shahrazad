@@ -5,18 +5,25 @@
 #include "move.h"
 #include "movepick.h"
 #include "ttable.h"
+#include "types.h"
+#include "thread.h"
+#include "position.h"
 
 #include <cassert>
 #include <vector>
 
 
+namespace Shahrazad {
+namespace search {
+
+// forward declarations
 template<bool pvNode>
-int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss);
+int search::Quiescence(int alpha, int beta, thread::ThreadData* thread_data, search::SearchStack* ss);
 
-TranspositionTable tt;
-const int          ageMask = 0b11111000;
+tt::TranspositionTable transposition_table;
+const int              ageMask = 0b11111000;
 
-uint8_t ttAge(uint8_t ageBoundPV) { return (ageBoundPV & ageMask) >> 3; }
+uint8_t search::ttAge(uint8_t ageBoundPV) { return (ageBoundPV & ageMask) >> 3; }
 
 // just another hashing function
 uint64_t hash(const uint64_t key) {
@@ -31,7 +38,8 @@ uint64_t hash(const uint64_t key) {
     return hash;
 }
 
-static bool isRepetition(const Position& pos) {
+// check if the position is a repetition
+static bool search::isRepetition(const position::Position& pos) {
     assert(pos.half_moves >= pos.fifty_moves_counter);
 
     int counter = 0;
@@ -43,46 +51,57 @@ static bool isRepetition(const Position& pos) {
         if (pos.played_positions[start - i] == pos.position_key)
         {
             if (i <= pos.stacked_his && i <= pos.stacked_his)
+            {
                 return true;
+            }
 
             counter++;
 
             if (counter >= 2)
+            {
                 return true;
+            }
         }
     }
 
     return false;
 }
 
-bool isMaterialDraw(const Position& pos) {
-    std::vector<pieceType> w_pieces;
-    std::vector<pieceType> b_pieces;
-    Bitboard               black_occ = pos._black_occupancy();
-    Bitboard               white_occ = pos._white_occupancy();
+// check if the position is a draw
+bool search::isMaterialDraw(const position::Position& pos) {
+    std::vector<types::PieceType> w_pieces;
+    std::vector<types::PieceType> b_pieces;
+    board::Bitboard               black_occ = pos._black_occupancy();
+    board::Bitboard               white_occ = pos._white_occupancy();
 
     for (int square = 0; square < 64; ++square)
     {
-        pieceType piece = pos.pieceOn(square);
+        types::PieceType piece = pos.pieceOn(square);
 
-        if (piece != NOPE)
+        if (piece != types::PieceType::NOPE)
         {
             if (white_occ.is_bitset(square))
+            {
                 w_pieces.push_back(piece);
+            }
             else
+            {
                 b_pieces.push_back(piece);
+            }
         }
     }
 
     if (w_pieces.empty() && b_pieces.empty())
+    {
         return true;
+    }
 
     const int sum = w_pieces.size() + b_pieces.size();
 
     if (sum == 1)
     {
-        pieceType single_piece = w_pieces.empty() ? b_pieces[0] : w_pieces[0];
-        return (single_piece != ROOK && single_piece != QUEEN);
+        types::PieceType single_piece = w_pieces.empty() ? b_pieces[0] : w_pieces[0];
+        return (single_piece != types::PieceType::ROOK && single_piece != types::PieceType::QUEEN);
     }
 
     if (sum == 2)
@@ -91,9 +110,9 @@ bool isMaterialDraw(const Position& pos) {
         {
             const auto& pieces = w_pieces.empty() ? b_pieces : w_pieces;
 
-            for (pieceType piece : pieces)
+            for (auto piece : pieces)
             {
-                if (piece != KNIGHT)
+                if (piece != types::PieceType::KNIGHT)
                     return false;
             }
 
@@ -101,479 +120,643 @@ bool isMaterialDraw(const Position& pos) {
         }
         else
         {
-            pieceType w_piece = w_pieces[0];
-            pieceType b_piece = b_pieces[0];
+            types::PieceType w_piece = w_pieces[0];
+            types::PieceType b_piece = b_pieces[0];
 
-            return (w_piece == KNIGHT && b_piece == KNIGHT)
-                || (w_piece == KNIGHT && b_piece == BISHOP)
-                || (w_piece == BISHOP && b_piece == KNIGHT);
+            return (w_piece == types::PieceType::KNIGHT && b_piece == types::PieceType::KNIGHT)
+                || (w_piece == types::PieceType::KNIGHT && b_piece == types::PieceType::BISHOP)
+                || (w_piece == types::PieceType::BISHOP && b_piece == types::PieceType::KNIGHT);
         }
     }
 
     return false;
 }
 
-bool isFiftyMovesDraw(const Position& pos) { return true; }
+bool search::isFiftyMovesDraw(const position::Position& pos) { 
+    return (pos.fifty_moves_counter >= 100);
+}
 
-bool isDraw(const Position& pos) {
+bool search::isDraw(const position::Position& pos) {
     return isRepetition(pos) || isFiftyMovesDraw(pos) || isMaterialDraw(pos);
 }
 
-uint8_t pack(uint8_t bound, bool wasPv, uint8_t age) {
+uint8_t search::pack(uint8_t bound, bool wasPv, uint8_t age) {
     return static_cast<uint8_t>(bound + (wasPv << 2) + (age << 3));
 }
 
-int get_history_score(const Position& pos,
-                      SearchData*     search_data,
-                      const Move&     move,
-                      SearchStack*    ss) {
-    return 1;
+int search::get_history_score(const position::Position& pos, SearchData* search_data, const types::Move& move,
+                              SearchStack* ss) {
+    int score = 0;
+    int offset = 0;
+    int piece = static_cast<int>(pos.pieceOn(move.getFrom()));
+    int target = static_cast<int>(pos.pieceOn(move.getTo()));
+    int piece_type = static_cast<int>(pos.pieceOn(move.getFrom()));
+    int target_type = static_cast<int>(pos.pieceOn(move.getTo()));
+    int piece_color = static_cast<int>(pos.getColor(move.getFrom()));
+    int target_color = static_cast<int>(pos.getColor(move.getTo()));
+    int piece_value = static_cast<int>(types::SEEval[piece_type]);
+    int target_value = static_cast<int>(types::SEEval[target_type]);
+    int piece_value_color = static_cast<int>(types::SEEval[piece_color]);
+    int target_value_color = static_cast<int>(types::SEEval[target_color]);
+
+    if (piece_value > 0)
+    {
+        score += search_data->searchHis[piece_color][piece_value] * piece_value_color;
+    }
 }
 
-void update_corrHistScore(const Position* pos, SearchData* search_data, int depth, int score) {
+void search::update_corrHistScore(const position::Position* pos, SearchData* search_data, int depth, int score) {
     return;
 }
 
-void update_histories(const Position* pos,
-                      SearchData*     search_data,
-                      SearchStack*    ss,
-                      int             depth,
-                      const Move&     best_move,
-                      MoveList*       quietMoves,
-                      MoveList*       noisyMoves) {
+void search::update_histories(const position::Position* pos, SearchData* search_data, SearchStack* ss, int depth,
+                              const types::Move& best_move, movegen::MoveList* quietMoves,
+                              movegen::MoveList* noisyMoves) {
 
     return;
 }
 
-int get_single_score(SearchStack* ss, Move& move, int offset) { return 1; }
+int search::get_single_score(SearchStack* ss, types::Move& move, int offset) { return 1; }
 
-void update_score(SearchStack* ss, Move& move, int bonus, const int offset, const Position& pos) {
+void search::update_score(search::SearchStack* ss, types::Move& move, int bonus, const int offset,
+                          const position::Position& pos) {
     if ((ss - offset)->move.data())
     {
-        const int scaledBonus =
-          bonus - get_single_score(ss, move, offset) * std::abs(bonus) / CH_MAX;
-        (*((ss - offset)->contHistEntry))[pos.pieceOn(move.getFrom())] += scaledBonus;
+        const int scaledBonus = bonus - get_single_score(ss, move, offset) * std::abs(bonus) / CH_MAX;
+        (*((ss - offset)->contHistEntry))[static_cast<int>(pos.pieceOn(move.getFrom()))] += scaledBonus;
     }
 }
 
-int history_bonus(int depth) { return std::min(16 * depth * depth + 32 * depth + 16, 1200); }
+int search::history_bonus(int depth) { return std::min(16 * depth * depth + 32 * depth + 16, 1200); }
 
-Bitboard get_piece_by_type(const Position* pos, pieceType piece) {
+board::Bitboard search::get_piece_by_type(const position::Position* pos, types::PieceType piece) {
     switch (piece)
     {
-    case KING :
+    case types::PieceType::KING :
         return pos->white_king.board() | pos->black_king.board();
-    case QUEEN :
+    case types::PieceType::QUEEN :
         return pos->white_queens.board() | pos->black_queens.board();
-    case ROOK :
+    case types::PieceType::ROOK :
         return pos->white_rooks.board() | pos->black_rooks.board();
-    case BISHOP :
+    case types::PieceType::BISHOP :
         return pos->white_bishops.board() | pos->black_bishops.board();
-    case KNIGHT :
+    case types::PieceType::KNIGHT :
         return pos->white_knights.board() | pos->black_knights.board();
-    case PAWN :
+    case types::PieceType::PAWN :
         return pos->white_pawns.board() | pos->black_pawns.board();
-
     default :
-        return Bitboard(0ULL);
+        return board::Bitboard(0ULL);
     }
 }
 
-bool SEE(const Position pos, Move& move, int thresh_hold) {
-    unsigned int _flag  = move.getFlags();
-    unsigned int to     = move.getTo();
-    unsigned int from   = move.getFrom();
-    pieceType    target = _flag == enPassant ? PAWN : pos.pieceOn(to);
-    int          promo;  //= promoted_piece_type(move);
-    int          val  = SEEval[target] - thresh_hold;
-    int          side = pos.current_side;
+bool search::SEE(const position::Position pos, types::Move& move, int thresh_hold) {
+    unsigned int     _flag = move.getFlags();
+    unsigned int     to    = move.getTo();
+    unsigned int     from  = move.getFrom();
+    types::PieceType target =
+      _flag == static_cast<int>(types::MoveType::EN_PASSANT) ? types::PieceType::PAWN : pos.pieceOn(to);
+    int promo;  //= promoted_piece_type(move);
+    int val  = types::SEEval[static_cast<int>(target)] - thresh_hold;
+    int side = static_cast<int>(pos.current_side);
 
-    if (_flag == KSCastle || _flag == QSCastle)
+    if (_flag == static_cast<int>(types::MoveType::KSCASTLE) || _flag == static_cast<int>(types::MoveType::QSCASTLE))
+    {
         return thresh_hold <= 0;
+    }
 
     if (val < 0)
-        return false;
-
-    pieceType attacker = pos.pieceOn(from);
-    val -= _flag == Promo ? SEEval[promo] : SEEval[attacker];
-
-    if (val >= 0)
-        return true;
-
-    Bitboard occ = pos.occupancy().board() ^ (1ULL << from);
-
-    if (_flag == enPassant)
-        occ;  // ^= get_enpassant_sq(pos);
-
-    uint64_t attackers;  //  = pos.attacks_to(to, occ);
-
-    Bitboard bishops =
-      Bitboard(side == WHITE ? pos.white_bishops.board() | pos.white_queens.board()
-                             : pos.black_bishops.board() | pos.black_queens.board());
-
-    Bitboard rooks = Bitboard(side == WHITE ? pos.white_rooks.board() | pos.white_queens.board()
-                                            : pos.black_rooks.board() | pos.black_queens.board());
-
-    Bitboard our_occ = side == WHITE ? pos._white_occupancy() : pos._black_occupancy();
-
-    while (true)
     {
-        attackers &= occ.board();
-
-        Bitboard OurAttackers = attackers & our_occ.board();
-
-        if (!OurAttackers.board())
-            break;
-
-        pieceType piece_type;
-        for (piece_type = PAWN; piece_type < KING;
-             piece_type = static_cast<pieceType>(piece_type + 1))
-        {
-            if (OurAttackers.board() & get_piece_by_type(&pos, piece_type).board())
-                break;
-        }
-
-        side ^= 1;
-        val = -val - 1 - SEEval[piece_type];
-
-        if (val >= 0)
-        {
-            if (piece_type == KING && (attackers & our_occ.board()))
-                side ^= 1;
-
-            break;
-        }
-
-        // occ ^= 1ULL << ();
-
-        if (piece_type == PAWN || piece_type == BISHOP || piece_type == QUEEN)
-            attackers |= get_piece_attacks(pos, to).board() & bishops.board();
-
-        if (piece_type == ROOK || piece_type == QUEEN)
-            attackers |= get_piece_attacks(pos, to).board() & rooks.board();
+        return false;
     }
 
-    return side != pos.getColor(from);
+    types::PieceType attacker = pos.pieceOn(from);
+    val -= _flag == static_cast<int>(types::MoveType::PROMOTION)
+           ? static_cast<int>(types::SEEval[promo])
+           : static_cast<int>(types::SEEval[static_cast<int>(attacker)]);
+
+    if (val >= 0)
+    {
+        return true;
+    }
+
+    board::Bitboard occ = pos.occupancy().board() ^ (1ULL << from);
+
+    if (_flag == static_cast<int>(types::MoveType::EN_PASSANT))
+    {
+        occ;  // ^= get_enpassant_sq(pos);}
+
+        uint64_t attackers;  //  = pos.attacks_to(to, occ);
+
+        board::Bitboard bishops = board::Bitboard(side == static_cast<int>(types::Color::WHITE)
+                                                    ? pos.white_bishops.board() | pos.white_queens.board()
+                                                    : pos.black_bishops.board() | pos.black_queens.board());
+
+        board::Bitboard rooks = board::Bitboard(side == static_cast<int>(types::Color::WHITE)
+                                                  ? pos.white_rooks.board() | pos.white_queens.board()
+                                                  : pos.black_rooks.board() | pos.black_queens.board());
+
+        board::Bitboard our_occ =
+          side == static_cast<int>(types::Color::WHITE) ? pos._white_occupancy() : pos._black_occupancy();
+
+        while (true)
+        {
+            attackers &= occ.board();
+
+            board::Bitboard OurAttackers = attackers & our_occ.board();
+
+            if (!OurAttackers.board())
+            {
+                break;
+            }
+
+            types::PieceType piece_type;
+            for (piece_type = types::PieceType::PAWN; piece_type < types::PieceType::KING;
+                 piece_type = static_cast<types::PieceType>(static_cast<int>(piece_type) + 1))
+            {
+                if (OurAttackers.board() & get_piece_by_type(&pos, piece_type).board())
+                {
+                    break;
+                }
+            }
+
+            side ^= 1;
+            val = -val - 1 - types::SEEval[static_cast<int>(piece_type)];
+
+            if (val >= 0)
+            {
+                if (piece_type == types::PieceType::KING && (attackers & our_occ.board()))
+                {
+                    side ^= 1;
+                }
+
+                break;
+            }
+
+            // occ ^= 1ULL << ();
+
+            if (piece_type == types::PieceType::PAWN || piece_type == types::PieceType::BISHOP
+                || piece_type == types::PieceType::QUEEN)
+            {
+                attackers |= movegen::get_piece_attacks(pos, types::Square(to)).board() & bishops.board();
+            }
+
+            if (piece_type == types::PieceType::ROOK || piece_type == types::PieceType::QUEEN)
+            {
+                attackers |= movegen::get_piece_attacks(pos, types::Square(to)).board() & rooks.board();
+            }
+        }
+
+        return side != static_cast<int>(pos.getColor(types::Square(from)));
+    }
 }
 
-Move get_best_move(const PvTable* pvTable) { return pvTable->pvArray[0][0]; }
+types::Move get_best_move(const PvTable* pvTable) { return pvTable->pvArray[0][0]; }
 
 template<bool pvNode>
-int search(
-  int alpha, int beta, int depth, const bool cutNode, ThreadData* thread_data, SearchStack* ss) {
-    Position*   pos              = &thread_data->pos;
-    SearchData* search_data      = &thread_data->search_data;
-    SearchInfo* info             = &thread_data->info;
-    PvTable*    pv_table         = &thread_data->pvTable;
-    const bool  inCheck          = pos->inCheck;
-    const bool  isRootNode       = (ss->ply == 0);
-    const Move  excludedMove     = ss->excludedMove;
-    const short excludedMove_val = excludedMove.data();
-    int         score            = -MAXSCORE;
-    int         eval;
-    int         rawEval;
-    bool        improve;
-    MoveList    list;
+int Shahrazad::search::search(int alpha, int beta, int depth, const bool cutNode, thread::ThreadData* thread_data,
+                              search::SearchStack* ss) {
+    // Constants for magic numbers used in the search
+    constexpr int FUTILITY_MARGIN_BASE         = 91;
+    constexpr int RAZOR_MARGIN                 = 256;
+    constexpr int HISTORY_DIVISOR_QUIET        = 8192;
+    constexpr int HISTORY_DIVISOR_TACTICAL     = 6144;
+    constexpr int DOUBLE_EXTENSION_THRESHOLD   = 17;
+    constexpr int SINGULAR_EXTENSION_THRESHOLD = 100;
+    constexpr int LMR_SCORE_BONUS_THRESHOLD    = 53;
+    constexpr int MAX_DOUBLE_EXTENSIONS        = 11;
 
+    // Thread data and search stack
+    position::Position* pos              = &thread_data->pos;
+    search::SearchData* search_data      = &thread_data->search_data;
+    search::SearchInfo* info             = &thread_data->info;
+    search::PvTable*    pv_table         = &thread_data->pvTable;
+    const bool          inCheck          = pos->inCheck;
+    const bool          isRootNode       = (ss->ply == 0);
+    const types::Move   excludedMove     = ss->excludedMove;
+    const short         excludedMove_val = excludedMove.data();
+    int                 score            = -search::MAXSCORE;
+    int                 eval;
+    int                 rawEval;
+    bool                improve;
+    movegen::MoveList   list;
+
+    // Initialize PV length for this ply if not in singular extension search
     if (!excludedMove_val)
-        pv_table->pvLength[ss->ply] = ss->ply;
-
-    if (ss->ply > info->seldepth)
-        info->seldepth = ss->ply;
-
-    if (depth <= 0)
-        return 0;
-
-    if (thread_data->id == 0 && TimeOver(&thread_data->info))
     {
-        thread_interrupt();
+        pv_table->pvLength[ss->ply] = ss->ply;
+    }
+
+    // Update selective depth if necessary
+    if (ss->ply > info->seldepth)
+    {
+        info->seldepth = ss->ply;
+    }
+
+    // Base cases
+    if (depth <= 0)
+    {
+        return 0;
+    }
+
+    // Check for time management and interruption
+    if (thread_data->id == 0 && thread::TimeOver(&thread_data->info))
+    {
+        thread::thread_interrupt();
         thread_data->info.stopped = true;
     }
 
+    // Early termination checks for non-root nodes
     if (!isRootNode)
     {
-        if (isDraw(*pos))
+        // Draw detection
+        if (search::isDraw(*pos))
+        {
             return 0;
+        }
 
-        if (ss->ply >= MAX_DEPTH - 1)
-            return inCheck ? 0 : network_eval(*pos, nnue, caches);
+        // Maximum depth check
+        if (ss->ply >= search::MAX_DEPTH - 1)
+        {
+            return inCheck ? 0 : eval::network_eval(*pos, nnue::nnue, nnue::caches);
+        }
 
-        alpha = std::max(alpha, -MATE_SCORE + ss->ply);
-        beta  = std::min(beta, MATE_SCORE - ss->ply - 1);
+        // Mate distance pruning
+        alpha = std::max(alpha, -search::MATE_SCORE + ss->ply);
+        beta  = std::min(beta, search::MATE_SCORE - ss->ply - 1);
 
         if (alpha >= beta)
+        {
             return alpha;
+        }
 
-        // check for upcoming repetition
+        // Check for upcoming repetition would be handled here
     }
 
-    ttEntry*       tt_entry = tt.probe(pos->position_key);
-    TT_data        tt_data  = tt_entry ? tt_entry->read() : TT_data();
-    const bool     tt_exist = !excludedMove_val && tt_entry;
-    const uint16_t move_val = tt_exist ? tt_data.move : NOMOVE;
-    const Move     tt_move  = tt_exist ? Move(move_val) : Move();
+    // Transposition table lookup
+    tt::TT_Entry*     tt_entry = search::transposition_table.probe(pos->position_key);
+    tt::TT_data       tt_data  = tt_entry ? tt_entry->read() : tt::TT_data();
+    const bool        tt_exist = !excludedMove_val && tt_entry;
+    const uint16_t    move_val = tt_exist ? tt_data.move : static_cast<int>(types::MoveType::NOMOVE);
+    const types::Move tt_move  = tt_exist ? types::Move(move_val) : types::Move();
 
-    if (!pvNode && tt_data.value != SCORE_NONE && tt_data.depth >= depth
-        && ((tt_data.bound == UPPER && tt_data.value <= alpha)
-            || (tt_data.bound == LOWER && tt_data.value >= alpha) || tt_data.bound == EXACT))
+    // TT cutoff (if score is exact or creates a cutoff and we're not in PV node)
+    if (!pvNode && tt_data.value != search::SCORE_NONE && tt_data.depth >= depth
+        && ((tt_data.bound == static_cast<int16_t>(types::Bound::UPPER) && tt_data.value <= alpha)
+            || (tt_data.bound == static_cast<int16_t>(types::Bound::LOWER) && tt_data.value >= beta)
+            || tt_data.bound == static_cast<int16_t>(types::Bound::EXACT)))
     {
         return tt_data.eval;
     }
 
-    if (depth >= 4 && tt_data.bound == NO_BOUND)
+    // Adjust depth for some conditions
+    if (depth >= 4 && tt_data.bound == static_cast<int16_t>(types::Bound::NO_BOUND))
+    {
         depth--;
+    }
 
-    (ss + 1)->excludedMove = NOMOVE;
-    (ss + 1)->searchKiller = NOMOVE;
+    // Initialize next ply search stack
+    (ss + 1)->excludedMove = types::Move(static_cast<int>(types::MoveType::NOMOVE));
+    (ss + 1)->searchKiller = types::Move(static_cast<int>(types::MoveType::NOMOVE));
 
+    // Static evaluation
     if (inCheck)
     {
-        eval = rawEval = ss->staticEval = SCORE_NONE;
+        // In check - no reliable static evaluation
+        eval = rawEval = ss->staticEval = search::SCORE_NONE;
     }
     else if (excludedMove_val)
     {
+        // Excluded move - use previously computed values
         eval = rawEval = ss->staticEval;
     }
     else if (tt_exist)
     {
-        rawEval = (tt_data.value != SCORE_NONE) ? tt_data.eval : network_eval(*pos, nnue, caches);
-        // need to adjust the eval for the history context
+        // Use or compute eval from transposition table
+        rawEval =
+          (tt_data.value != search::SCORE_NONE) ? tt_data.eval : eval::network_eval(*pos, nnue::nnue, nnue::caches);
 
         eval = ss->staticEval = rawEval;
 
-        if (tt_data.eval != SCORE_NONE
-            && ((tt_data.bound == UPPER && tt_data.eval < eval)
-                || (tt_data.bound == LOWER && tt_data.eval > eval) || tt_data.bound == EXACT))
+        // If TT has more reliable evaluation, use it
+        if (tt_data.eval != search::SCORE_NONE
+            && ((tt_data.bound == static_cast<int16_t>(types::Bound::UPPER) && tt_data.eval < eval)
+                || (tt_data.bound == static_cast<int16_t>(types::Bound::LOWER) && tt_data.eval > eval)
+                || tt_data.bound == static_cast<int16_t>(types::Bound::EXACT)))
         {
             eval = tt_data.eval;
         }
     }
     else
     {
-        rawEval = network_eval(*pos, nnue, caches);
-        // again you need to adjust the eval
-        eval = rawEval;
+        // Compute fresh evaluation
+        rawEval = eval::network_eval(*pos, nnue::nnue, nnue::caches);
+        eval    = rawEval;
 
-        TT_data new_data(rawEval, NO_BOUND, NOMOVE, SCORE_NONE, pos->position_key, 0);
-        tt.save_entry(tt_entry->save(new_data));
+        // Store basic evaluation in TT
+        tt::TT_data new_data(rawEval, types::Bound::NO_BOUND, types::MoveType::NOMOVE, search::SCORE_NONE,
+                             pos->position_key, 0);
+        tt_entry->save(new_data);
+        transposition_table.save_entry(tt_entry);
     }
 
+    // Determine if position is improving
     if (inCheck)
+    {
         improve = false;
-    else if ((ss - 2)->staticEval != SCORE_NONE)
+    }
+    else if ((ss - 2)->staticEval != search::SCORE_NONE)
+    {
         improve = ss->staticEval > (ss - 2)->staticEval;
-    else if ((ss - 4)->staticEval != SCORE_NONE)
+    }
+    else if ((ss - 4)->staticEval != search::SCORE_NONE)
+    {
         improve = ss->staticEval > (ss - 4)->staticEval;
+    }
     else
+    {
         improve = true;
+    }
 
+    // ---------- Pruning techniques for non-PV nodes -----------
     if (!pvNode && !excludedMove_val && !inCheck)
     {
-        if (depth < 10 && abs(eval) < MATE_FOUND && eval - 91 * (depth - improve) >= beta)
+        // Reverse Futility Pruning / Static Null Move Pruning
+        if (depth < 10 && std::abs(eval) < search::MATE_FOUND
+            && eval - FUTILITY_MARGIN_BASE * (depth - improve) >= beta)
+        {
             return eval;
+        }
 
-        Bitboard pawns    = pos->current_side == WHITE ? pos->white_pawns : pos->black_pawns;
-        bool     no_pawns = (pawns.board() == 0ULL);
+        // Get pawn presence information for pruning decisions
+        board::Bitboard pawns    = pos->current_side == types::Color::WHITE ? pos->white_pawns : pos->black_pawns;
+        bool            no_pawns = (pawns.board() == 0ULL);
 
-        if (eval >= ss->staticEval && eval >= beta && (ss - 1)->move != NOMOVE
+        // Null Move Pruning
+        if (eval >= ss->staticEval && eval >= beta
+            && (ss - 1)->move.getFlags() != static_cast<int16_t>(types::MoveType::NOMOVE)
             && ss->ply >= thread_data->nmpPlies && no_pawns)
         {
-            ss->move          = NOMOVE;
+
+            ss->move          = types::Move(static_cast<int16_t>(types::MoveType::NOMOVE));
             const int R       = 3 + depth / 3 + std::min((eval - beta) / 200, 3);
-            ss->contHistEntry = &search_data->contHist[NOPE];
+            ss->contHistEntry = &search_data->contHist[static_cast<int>(types::PieceType::NOPE)];
 
+            // Make null move and search with reduced depth
             pos->make_null_move();
-
-            int nmpScore =
-              -search<false>(-beta, -beta + 1, depth - R, !cutNode, thread_data, ss + 1);
-
+            int nmpScore = -search::search<false>(-beta, -beta + 1, depth - R, !cutNode, thread_data, ss + 1);
             pos->take_null_move();
 
             if (nmpScore >= beta)
             {
-                if (nmpScore > MATE_FOUND)
+                // Adjust mate scores
+                if (nmpScore > search::MATE_FOUND)
+                {
                     nmpScore = beta;
+                }
 
+                // Return score directly for shallow depths or non-critical lines
                 if (thread_data->nmpPlies || depth < 15)
+                {
                     return nmpScore;
+                }
 
+                // Verify null move pruning with a reduced depth search
                 thread_data->nmpPlies = ss->ply + (depth - R) * 3;
-                int verificationScore =
-                  search<false>(beta - 1, beta, depth - R, false, thread_data, ss);
+                int verificationScore = search<false>(beta - 1, beta, depth - R, false, thread_data, ss);
                 thread_data->nmpPlies = 0;
 
                 if (verificationScore >= beta)
+                {
                     return nmpScore;
+                }
             }
         }
 
-        if (depth <= 5 && eval + 256 * depth < alpha)
+        // Razoring - try quiescence search for hopeless positions
+        if (depth <= 5 && eval + RAZOR_MARGIN * depth < alpha)
         {
-            const int razorScore = Quiescence<false>(alpha, beta, thread_data, ss);
+            const int razorScore = search::Quiescence<false>(alpha, beta, thread_data, ss);
 
             if (razorScore <= alpha)
+            {
                 return razorScore;
+            }
         }
     }
 
-    const int origAlpha  = alpha;
-    int       bestScore  = -MAXSCORE;
-    int       totalMoves = 0;
-    bool      skipQuiets = false;
-    Move      best_move  = NOMOVE;
-    Move      move;
+    // ---------- Move generation and search phase -----------
+    const int   origAlpha  = alpha;
+    int         bestScore  = -search::MAXSCORE;
+    int         totalMoves = 0;
+    bool        skipQuiets = false;
+    types::Move best_move;
+    best_move.null_();
+    movepick::Movepicker move_picker = movepick::Movepicker();
 
-    Movepicker move_picker = Movepicker();
-    MoveList   quietMoves, noisyMoves;
+    types::Move       move;
+    movegen::MoveList quietMoves, noisyMoves;
 
-    while ((move = move_picker.next(skipQuiets)) != NOMOVE)
+    // Main move loop
+    while (!(move = move_picker.next(skipQuiets)).is_null())
     {
-        if (move == excludedMove || !isLegal(*pos, move))
+        // Skip illegal moves and excluded moves (for singular extensions)
+        if (move == excludedMove || !movegen::isLegal(*pos, move))
+        {
             continue;
+        }
 
         totalMoves++;
 
-        const bool isQuiet     = !is_tactical(move);
-        const int  moveHistory = get_history_score(*pos, search_data, move, ss);
-        Bitboard   pawns       = pos->current_side == WHITE ? pos->white_pawns : pos->black_pawns;
-        bool       no_pawns    = (pawns.board() == 0ULL);
+        const bool      isQuiet     = !movegen::is_tactical(move);
+        const int       moveHistory = search::get_history_score(*pos, search_data, move, ss);
+        board::Bitboard pawns       = pos->current_side == types::Color::WHITE ? pos->white_pawns : pos->black_pawns;
+        bool            no_pawns    = (pawns.board() == 0ULL);
 
-        if (!isRootNode && no_pawns && bestScore > -MATE_FOUND)
+        // Move pruning and reduction logic
+        if (!isRootNode && no_pawns && bestScore > -search::MATE_FOUND)
         {
             const int lmrDepth =
-              std::max(0, depth - reductions[isQuiet][std::min(depth, 63)][std::min(totalMoves, 63)]
-                            + moveHistory / 8192);
+              std::max(0, depth - types::reductions[isQuiet][std::min(depth, 63)][std::min(totalMoves, 63)]
+                            + moveHistory / HISTORY_DIVISOR_QUIET);
 
+            // Late Move Pruning for quiet moves
             if (!skipQuiets)
             {
-                if (!pvNode && !inCheck && totalMoves > lmp_margin[std::min(depth, 63)][improve])
+                if (!pvNode && !inCheck && totalMoves > types::lmp_margin[std::min(depth, 63)][improve])
+                {
                     skipQuiets = true;
+                }
 
                 if (!inCheck && lmrDepth < 11 && ss->staticEval + 250 + 150 * lmrDepth <= alpha)
+                {
                     skipQuiets = true;
+                }
             }
 
-            if (depth <= 8 && !SEE(*pos, move, see_margin[std::min(lmrDepth, 63)][isQuiet]))
+            // Static Exchange Evaluation (SEE) pruning
+            if (depth <= 8 && !search::SEE(*pos, move, types::see_margin[std::min(lmrDepth, 63)][isQuiet]))
+            {
                 continue;
+            }
         }
 
+        // Singular extensions
         int extension = 0;
 
         if (ss->ply < thread_data->rootDepth * 2)
         {
+            // Only consider extensions for the TT move and in appropriate situations
             if (!isRootNode && depth >= 7 && move == tt_data.move && !excludedMove_val
-                && (tt_data.bound & LOWER) && abs(tt_data.value) < MATE_SCORE
+                && (tt_data.bound & types::Bound::LOWER) && std::abs(tt_data.value) < search::MATE_SCORE
                 && tt_data.depth >= depth - 3)
             {
+
                 const int singular_beta = tt_data.value - depth;
                 const int singularDepth = (depth - 1) / 2;
 
-                ss->excludedMove   = tt_data.move;
-                int singular_score = search<false>(singular_beta - 1, singular_beta, singularDepth,
-                                                   cutNode, thread_data, ss);
-                ss->excludedMove   = NOMOVE;
+                // Singular extension search
+                ss->excludedMove = tt_data.move;
+                int singular_score =
+                  search::search<false>(singular_beta - 1, singular_beta, singularDepth, cutNode, thread_data, ss);
+                ss->excludedMove.null_();
 
+                // Apply extensions based on singular extension search results
                 if (singular_score < singular_beta)
                 {
                     extension = 1;
 
-                    if (!pvNode && singular_score < singular_beta - 17
-                        && ss->doubleExtensions <= 11)
+                    // Double extension for very singular moves (much better than alternatives)
+                    if (!pvNode && singular_score < singular_beta - DOUBLE_EXTENSION_THRESHOLD
+                        && ss->doubleExtensions <= MAX_DOUBLE_EXTENSIONS)
                     {
-                        extension =
-                          2 + (!is_tactical(tt_data.move) && singular_score < singular_beta - 100);
+                        extension = 2
+                                  + (!movegen::is_tactical(tt_data.move)
+                                     && singular_score < singular_beta - SINGULAR_EXTENSION_THRESHOLD);
                         ss->doubleExtensions = (ss - 1)->doubleExtensions + 1;
                         depth += depth < 10;
                     }
                 }
                 else if (singular_score >= beta)
                 {
+                    // Move causes a beta cutoff in the singular search
                     return singular_score;
                 }
                 else if (tt_data.value >= beta)
                 {
+                    // TT move might not be singular, but it's still good
                     extension = -2;
                 }
                 else if (cutNode)
                 {
+                    // Slight reduction in cut nodes when move isn't singular
                     extension = -1;
                 }
             }
         }
 
+        // Adjust depth based on extensions
         int new_depth = depth - 1 + extension;
 
-        pos->do_move(move);
-        ss->contHistEntry = &search_data->contHist[pos->pieceOn(move.getFrom())];
+        // Make the move
+        movegen::do_move(std::ref<position::Position>(*pos), move);
+        ss->contHistEntry = &search_data->contHist[static_cast<int>(pos->pieceOn(move.getFrom()))];
         list.append(move);
         info->nodes++;
         const uint64_t nodes_before_search = info->nodes;
 
+        // Late Move Reductions (LMR)
         if (totalMoves > 1 + pvNode && depth >= 3 && (isQuiet))
         {
-            int depth_reduction =
-              reductions[isQuiet][std::min(depth, 63)][std::min(totalMoves, 63)];
+            // Calculate base reduction
+            int depth_reduction = types::reductions[isQuiet][std::min(depth, 63)][std::min(totalMoves, 63)];
 
+            // Adjust reduction based on move characteristics
             if (isQuiet)
             {
                 if (cutNode)
+                {
                     depth_reduction += 2;
+                }
 
                 if (!improve)
+                {
                     depth_reduction++;
+                }
 
                 if (move == move_picker.killer || move == move_picker.count)
+                {
                     depth_reduction--;
+                }
 
                 if (pos->inCheck)
+                {
                     depth_reduction--;
+                }
 
-                depth_reduction -= moveHistory / 8192;
+                depth_reduction -= moveHistory / HISTORY_DIVISOR_QUIET;
             }
             else
             {
                 if (cutNode)
+                {
                     depth_reduction += 2;
+                }
 
-                depth_reduction -= moveHistory / 6144;
+                depth_reduction -= moveHistory / HISTORY_DIVISOR_TACTICAL;
             }
 
+            // Apply reduction within limits
             depth_reduction   = std::clamp(depth_reduction, 0, new_depth - 1);
             int reduced_depth = new_depth - depth_reduction;
-            score = -search<false>(-alpha - 1, -alpha, reduced_depth, true, thread_data, ss + 1);
 
+            // Reduced depth search with zero window
+            score = -search::search<false>(-alpha - 1, -alpha, reduced_depth, true, thread_data, ss + 1);
+
+            // Re-search at full depth if the reduced search exceeded alpha
             if (score > alpha && new_depth > reduced_depth)
             {
-                const bool goDeepe   = score > (bestScore + 53 + 2 * new_depth);
+                const bool goDeepe   = score > (bestScore + LMR_SCORE_BONUS_THRESHOLD + 2 * new_depth);
                 const bool goShallow = score < (bestScore + new_depth);
                 new_depth += goDeepe - goShallow;
 
                 if (new_depth > reduced_depth)
-                    score -=
-                      search<false>(-alpha - 1, -alpha, new_depth, !cutNode, thread_data, ss + 1);
+                {
+                    score -= search::search<false>(-alpha - 1, -alpha, new_depth, !cutNode, thread_data, ss + 1);
+                }
 
-                int bonus = score > alpha ? history_bonus(depth) : -history_bonus(depth);
-
-                update_score(ss, move, bonus);
+                // Update history scores based on search result
+                int bonus = score > alpha ? search::history_bonus(depth) : -search::history_bonus(depth);
+                search::update_score(ss, move, bonus);
             }
         }
         else if (!pvNode || totalMoves > 1)
         {
-            score = -search<false>(-alpha - 1, -alpha, new_depth, !cutNode, thread_data, ss + 1);
+            // Regular zero window search for non-first moves or non-PV nodes
+            score = -search::search<false>(-alpha - 1, -alpha, new_depth, !cutNode, thread_data, ss + 1);
         }
 
+        // PV search - either first move in PV node or promising move
         if (pvNode && (totalMoves == 1 || score > alpha))
-            score = -search<true>(-beta, -alpha, new_depth, false, thread_data, ss + 1);
+        {
+            score = -search::search<true>(-beta, -alpha, new_depth, false, thread_data, ss + 1);
+        }
 
-        pos->undo_move(move);
+        // Undo the move
+        pos->undo_move();
 
+        // Track node usage for root moves
         if (thread_data->id == 0 && isRootNode)
+        {
             thread_data->nodeSpentTable[move.getFrom()] += info->nodes - nodes_before_search;
+        }
 
-
+        // Check for search stop
         if (info->stopped)
+        {
             return 0;
+        }
 
+        // Update best score and alpha if this move is better
         if (score > bestScore)
         {
             bestScore = score;
@@ -582,28 +765,36 @@ int search(
             {
                 best_move = move;
 
+                // Update PV line
                 if (pvNode)
                 {
                     pv_table->pvArray[ss->ply][ss->ply] = move;
 
                     for (int next = ss->ply + 1; next < pv_table->pvLength[ss->ply + 1]; next++)
+                    {
                         pv_table->pvArray[ss->ply][next] = pv_table->pvArray[ss->ply + 1][next];
+                    }
 
                     pv_table->pvLength[ss->ply] = pv_table->pvLength[ss->ply + 1];
                 }
 
+                // Handle beta cutoff
                 if (score >= beta)
                 {
+                    // Update killer moves and counter moves
                     if (isQuiet)
                     {
                         ss->searchKiller = best_move;
 
                         if (ss->ply >= 1)
+                        {
                             search_data->counterMoves[(ss - 1)->move.getFrom()] = move.data();
+                        }
                     }
 
-                    update_histories(pos, search_data, ss, depth + (eval <= alpha), best_move,
-                                     &quietMoves, &noisyMoves);
+                    // Update history tables
+                    search::update_histories(pos, search_data, ss, depth + (eval <= alpha), best_move, &quietMoves,
+                                             &noisyMoves);
 
                     break;
                 }
@@ -613,58 +804,71 @@ int search(
         }
     }
 
+    // Handle special cases - no legal moves or excluded move search
     if (totalMoves == 0)
     {
-        return excludedMove_val ? -MAXSCORE : inCheck ? -MATE_SCORE + ss->ply : 0;
+        return excludedMove_val ? -search::MAXSCORE : inCheck ? -search::MATE_SCORE + ss->ply : 0;
     }
 
-    int bound = bestScore >= beta ? LOWER : alpha != origAlpha ? EXACT : UPPER;
+    // Determine bound type for TT entry
+    int bound = bestScore >= beta  ? static_cast<int>(types::Bound::LOWER)
+              : alpha != origAlpha ? static_cast<int>(types::Bound::EXACT)
+                                   : static_cast<int>(types::Bound::UPPER);
 
+    // Store search results in transposition table
     if (!excludedMove.data())
     {
-        if (!inCheck && (!best_move.data() || !is_tactical(best_move))
-            && !(bound == LOWER && bestScore <= ss->staticEval)
-            && !(bound == UPPER && bestScore >= ss->staticEval))
+        // Update correction history for non-tactical moves
+        if (!inCheck && (!best_move.data() || !movegen::is_tactical(best_move))
+            && !(bound == static_cast<int>(types::Bound::LOWER) && bestScore <= ss->staticEval)
+            && !(bound == static_cast<int>(types::Bound::UPPER) && bestScore >= ss->staticEval))
         {
-            update_corrHistScore(pos, search_data, depth, bestScore - ss->staticEval);
+            search::update_corrHistScore(pos, search_data, depth, bestScore - ss->staticEval);
         }
 
-        TT_data new_data(rawEval, bound, best_move.data(), /*this needs to change*/ 0,
-                         pos->position_key, depth);
-        tt.save_entry(tt_entry->save(new_data));
+        // Save position to transposition table
+        tt::TT_data new_data(rawEval, bound, best_move.data(), bestScore, pos->position_key, depth);
+        tt_entry->save(new_data);
+        transposition_table.save_entry(tt_entry);
     }
 
     return bestScore;
 }
 
+// Quiescence search function
 template<bool pvNode>
-int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
-    Position*   pos         = &thread_data->pos;
-    SearchData* search_data = &thread_data->search_data;
-    SearchInfo* info        = &thread_data->info;
-    const bool  inCheck     = pos->inCheck;
-    int         best_score;
-    int         rawEval;
+int Quiescence(int alpha, int beta, thread::ThreadData* thread_data, search::SearchStack* ss) {
+    position::Position* pos         = &thread_data->pos;
+    search::SearchData* search_data = &thread_data->search_data;
+    search::SearchInfo* info        = &thread_data->info;
+    const bool          inCheck     = pos->inCheck;
+    int                 best_score;
+    int                 rawEval;
 
-    if (thread_data->id == 0 && TimeOver(&thread_data->info))
+    if (thread_data->id == 0 && thread::TimeOver(&thread_data->info))
     {
-        thread_interrupt();
+        thread::thread_interrupt();
         thread_data->info.stopped = true;
     }
 
-    if (isDraw(*pos))
+    if (search::isDraw(*pos))
+    {
         return 0;
+    }
 
-    if (ss->ply >= MAX_DEPTH - 1)
-        return inCheck ? 0 : network_eval(*pos, nnue, caches);
+    if (ss->ply >= search::MAX_DEPTH - 1)
+    {
+        return inCheck ? 0 : eval::network_eval(*pos, nnue::nnue, nnue::caches);
+    }
 
-    ttEntry*   tt_entry = tt.probe(pos->position_key);
-    const bool tt_hit   = tt_entry ? true : false;
-    TT_data    tt_data  = tt_entry->read();
+    tt::TT_Entry* tt_entry = transposition_table.probe(pos->position_key);
+    const bool    tt_hit   = tt_entry ? true : false;
+    tt::TT_data   tt_data  = tt_entry->read();
 
-    if (!pvNode && tt_data.value != SCORE_NONE
-        && ((tt_data.bound == UPPER && tt_data.value <= alpha)
-            || (tt_data.bound == LOWER && tt_data.value >= beta) || tt_data.bound == EXACT))
+    if (!pvNode && tt_data.value != search::SCORE_NONE
+        && ((tt_data.bound == static_cast<int16_t>(types::Bound::UPPER) && tt_data.value <= alpha)
+            || (tt_data.bound == static_cast<int16_t>(types::Bound::LOWER) && tt_data.value >= beta)
+            || tt_data.bound == static_cast<int16_t>(types::Bound::EXACT)))
     {
         return tt_data.value;
     }
@@ -673,61 +877,70 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
 
     if (inCheck)
     {
-        rawEval = ss->staticEval = SCORE_NONE;
-        best_score               = -MAXSCORE;
+        rawEval = ss->staticEval = search::SCORE_NONE;
+        best_score               = -search::MAXSCORE;
     }
     else if (tt_hit)
     {
-        rawEval = tt_data.eval != SCORE_NONE ? tt_data.eval : network_eval(*pos, nnue, caches);
+        rawEval        = tt_data.eval != SCORE_NONE ? tt_data.eval : eval::network_eval(*pos, nnue, caches);
         ss->staticEval = best_score = adjustEvalWithCorrHist(pos, search_data, rawEval);
 
-        if (tt_data.value != SCORE_NONE
-            && ((tt_data.bound == UPPER && tt_data.value < best_score)
-                || (tt_data.bound == LOWER && tt_data.value > best_score)
-                || tt_data.bound == EXACT))
+        if (tt_data.value != search::SCORE_NONE
+            && ((tt_data.bound == static_cast<int16_t>(types::Bound::UPPER) && tt_data.value < best_score)
+                || (tt_data.bound == static_cast<int16_t>(types::Bound::LOWER) && tt_data.value > best_score)
+                || tt_data.bound == static_cast<int16_t>(types::Bound::EXACT)))
         {
             best_score = tt_data.value;
         }
     }
     else
     {
-        rawEval    = network_eval(*pos, nnue, pos.accumulator);
+        rawEval    = eval::network_eval(*pos, nnue, pos.accumulator);
         best_score = ss->staticEval = adjustEvalWithCorrHist(pos, search_data, rawEval);
 
-        TT_data new_data(rawEval, NO_BOUND, NOMOVE, SCORE_NONE, pos->position_key, 0);
-        tt.save_entry(tt_entry->save(new_data));
+        tt::TT_data new_data(rawEval, static_cast<int16_t>(types::Bound::NO_BOUND), types::MoveType::NOMOVE,
+                             search::SCORE_NONE, pos->position_key, 0);
+        tt_entry->save(new_data);
+        transposition_table.save_entry(tt_entry);
     }
 
     if (best_score >= beta)
+    {
         return best_score;
+    }
 
     alpha = std::max(alpha, best_score);
 
-    Movepicker move_picker;
+    movepick::Movepicker move_picker;
     // initialize the move picker
 
-    Move best_move = NOMOVE;
-    Move move;
-    int  totalMoves = 0;
+    types::Move best_move;
+    best_move.null_();
+    types::Move move;
+    int         totalMoves = 0;
 
-    while ((move = move_picker.next(!inCheck || best_score > -MATE_FOUND)) != NOMOVE)
+    while (!(move = move_picker.next(!inCheck || best_score > -search::MATE_FOUND)).is_null())
     {
-        if (!isLegal(*pos, move))
+        if (!movegen::isLegal(*pos, move))
+        {
             continue;
+        }
 
         totalMoves++;
 
-        bool     has_pawns = false;
-        Bitboard pawns     = pos->current_side == WHITE ? pos->white_pawns : pos->black_pawns;
+        bool            has_pawns = false;
+        board::Bitboard pawns     = pos->current_side == types::Color::WHITE ? pos->white_pawns : pos->black_pawns;
 
         if (pawns.board() != 0ULL)
+        {
             has_pawns = true;
+        }
 
-        if (best_score > -MATE_FOUND && !inCheck && !has_pawns)
+        if (best_score > -search::MATE_FOUND && !inCheck && !has_pawns)
         {
             const int fut_base = ss->staticEval + 192;
 
-            if (fut_base <= alpha && !SEE(*pos, move, 1))
+            if (fut_base <= alpha && !search::SEE(*pos, move, 1))
             {
                 best_score = std::max(fut_base, best_score);
                 continue;
@@ -735,15 +948,17 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
         }
 
         ss->move = move;
-        pos->do_move(move);
+        movegen::do_move(*pos, move);
 
         info->nodes++;
-        const int score = -Quiescence<pvNode>(-beta, -alpha, thread_data, ss + 1);
+        const int score = -search::Quiescence<pvNode>(-beta, -alpha, thread_data, ss + 1);
 
-        pos->undo_move(move);
+        pos->undo_move();
 
         if (info->stopped)
+        {
             return 0;
+        }
 
         if (score > best_move.data())
         {
@@ -754,7 +969,9 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
                 best_move = move;
 
                 if (score >= beta)
+                {
                     break;
+                }
 
                 alpha = score;
             }
@@ -763,13 +980,17 @@ int Quiescence(int alpha, int beta, ThreadData* thread_data, SearchStack* ss) {
 
     if (totalMoves == 0 && inCheck)
     {
-        return -MATE_SCORE + ss->ply;
+        return -search::MATE_SCORE + ss->ply;
 
-        int bound = best_score >= beta ? LOWER : UPPER;
+        int bound = best_score >= beta ? static_cast<int>(types::Bound::LOWER) : static_cast<int>(types::Bound::UPPER);
 
-        TT_data new_data(rawEval, bound, best_move.data(), best_score, pos->position_key, 0);
-        tt.save_entry(tt_entry->save(new_data));
+        tt::TT_data new_data(rawEval, bound, best_move.data(), best_score, pos->position_key, 0);
+        tt_entry->save(new_data);
+        transposition_table.save_entry(tt_entry);
 
         return best_score;
     }
 }
+
+}  // namespace search
+}  // namespace Shahrazad
