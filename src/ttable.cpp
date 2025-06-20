@@ -1,6 +1,9 @@
 #include "ttable.h"
 
 
+namespace Shahrazad {
+namespace tt {
+
 // hashing func for indexing
 uint64_t hash(const int16_t pos_key) {
     uint64_t h   = 5381;
@@ -10,18 +13,18 @@ uint64_t hash(const int16_t pos_key) {
 }
 
 // get data from entry
-TT_data ttEntry::read() const {
+inline TT_data TT_Entry::read() const {
     return TT_data(data.eval, data.bound, data.move, data.value, data.pos_key, data.depth);
 }
 
 // save data in entry
-void ttEntry::save(TT_data& d) { data = TT_data(d); }
+inline void TT_Entry::save(TT_data& d) { data = TT_data(d); }
 
 // get entry from table (as in looking around)
-ttEntry* TranspositionTable::probe(const uint64_t key) const {
-    int       _hash   = hash(static_cast<int16_t>(key));
-    int       index   = _hash % capacity;
-    ttBucket* cluster = &table[index];
+TT_Entry* TranspositionTable::probe(const uint64_t key) const {
+    int        _hash   = hash(static_cast<int16_t>(key));
+    int        index   = _hash % capacity;
+    TT_Bucket* cluster = &table[index];
 
     for (int i = 0; i < BUCKET_SIZE; i++)
     {
@@ -32,10 +35,13 @@ ttEntry* TranspositionTable::probe(const uint64_t key) const {
     return nullptr;
 }
 
-void TranspositionTable::save_entry(const ttEntry* entry) {
-    int       _hash   = hash(static_cast<int16_t>(entry->read().pos_key));
-    ttBucket* cluster = &table[_hash % capacity];
+void TranspositionTable::save_entry(const TT_Entry* entry) {
+    int        _hash   = hash(static_cast<int16_t>(entry->read().pos_key));
+    TT_Bucket* cluster = &table[_hash % capacity];
     // We have to do some checking for the entry age to decide the replacement
     if (cluster)
         cluster->entries[0] = *entry;
 }
+
+}  // namespace tt
+}  // namespace Shahrazad
