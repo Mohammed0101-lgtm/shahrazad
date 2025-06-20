@@ -4,15 +4,18 @@
 #include "types.h"
 
 
+namespace Shahrazad {
+namespace tt {
+
 // constants
-constexpr int     BUCKET_SIZE    = 3;
-constexpr size_t  MAX_TABLE_SIZE = 4000;
-constexpr uint8_t MAX_AGE        = 1 << 5;
-constexpr uint8_t AGE_MASK       = MAX_AGE - 1;
+constexpr int         BUCKET_SIZE    = 3;
+constexpr std::size_t MAX_TABLE_SIZE = 4000;
+constexpr uint8_t     MAX_AGE        = 1 << 5;
+constexpr uint8_t     AGE_MASK       = MAX_AGE - 1;
 
 // structs
-struct ttEntry;
-struct ttBucket;
+struct TT_Entry;
+struct TT_Bucket;
 class TranspositionTable;
 
 // the actual data of a single entry
@@ -27,8 +30,7 @@ struct TT_data {
 
     TT_data() {};
 
-    TT_data(
-      int16_t eval, int16_t bound, uint16_t move, int8_t value, uint16_t pos_key, uint8_t depth) {
+    TT_data(int16_t eval, int16_t bound, uint16_t move, int8_t value, uint16_t pos_key, uint8_t depth) {
         this->eval    = eval;
         this->bound   = bound;
         this->move    = move;
@@ -39,7 +41,7 @@ struct TT_data {
 };
 
 // entry in the TT table
-struct ttEntry {
+struct TT_Entry {
    protected:
     TT_data data;
 
@@ -52,8 +54,8 @@ struct ttEntry {
 };
 
 // bucket of entries can contain up to BUCKET_SIZE entries
-struct ttBucket {
-    ttEntry  entries[BUCKET_SIZE] = {};
+struct TT_Bucket {
+    TT_Entry entries[BUCKET_SIZE] = {};
     uint16_t age;  // for replacement decision
 };
 
@@ -65,15 +67,18 @@ class TranspositionTable {
         free(table);
     }
 
-    ttEntry* probe(const uint64_t key) const;
+    TT_Entry* probe(const uint64_t key) const;
 
-    void save_entry(const ttEntry* entry);
+    void save_entry(const TT_Entry* entry);
 
    protected:
-    friend struct ttEntry;
+    friend struct TT_Entry;
 
-    size_t    capacity;  // remember to initialize this variable
-    size_t    table_size  = 0;
-    ttBucket* table       = nullptr;
-    uint8_t   generations = 0;
+    std::size_t capacity;  // remember to initialize this variable
+    std::size_t table_size  = 0;
+    TT_Bucket*  table       = nullptr;
+    uint8_t     generations = 0;
 };
+
+}  // namespace tt
+}  // namespace Shahrazad
