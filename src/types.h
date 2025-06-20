@@ -3,8 +3,9 @@
 #include <cstdint>
 #include <string>
 
-inline float max(float a, float b) { return a > b ? a : b; }
-inline float min(float a, float b) { return a < b ? a : b; }
+
+namespace Shahrazad {
+namespace types {
 
 // static piece values
 inline static const float    QUEEN_VAL  = 9.00;
@@ -17,10 +18,9 @@ inline static const uint64_t MASK       = 1ULL;
 inline int    reductions[2][64][64];
 inline int    lmp_margin[64][2];
 inline int    see_margin[64][2];
-
 constexpr int SEEval[15] = {100, 422, 422, 642, 1015, 0, 100, 422, 422, 642, 1015, 0, 0, 0, 0};
 
-typedef enum {
+enum class PieceType : int {
     KING,
     QUEEN,
     ROOK,
@@ -28,13 +28,16 @@ typedef enum {
     KNIGHT,
     PAWN,
     NOPE
-} pieceType;
+};
 
-enum {
+enum class MoveType : int {
+    QUIET,
+    KSCASTLE,
+    QSCASTLE,
     CAPTURE,
     EN_PASSANT,
-    CASTLE,
-    QUIET
+    PROMOTION,
+    NOMOVE
 };
 
 class Move {
@@ -72,7 +75,10 @@ class Move {
     static constexpr Move null() { return Move(65); }
     static constexpr Move none() { return Move(0); }
 
-    bool isCapture() const { return getFlags() == CAPTURE; }
+    void null_() { *this = null(); }
+    bool is_null() { return *this == null(); }
+
+    bool isCapture() const { return getFlags() == static_cast<int>(MoveType::CAPTURE); }
 
     bool hasFlag(uint32_t flag) const { return getFlags() == flag; }
 
@@ -88,20 +94,20 @@ class Move {
 };
 
 // encode sides
-enum {
+enum class Color : int {
     WHITE,
     BLACK,
     BOTH
 };
 
-enum {
+enum class Bound : int {
     NO_BOUND,
     UPPER,
     LOWER,
     EXACT
 };
 
-enum Square : int {
+enum class Square : int {
     a1,
     b1,
     c1,
@@ -170,27 +176,26 @@ enum Square : int {
 };
 
 inline int diagonal_first[] = {
-  1, 2,  3,  4,  5, 6, 7, 8, 2,  3,  4,  5,  6, 7, 8, 9,  3,  4,  5,  6,  7, 8,
-  9, 0,  4,  5,  6, 7, 8, 9, 0,  10, 5,  6,  7, 8, 9, 0,  10, 11, 6,  7,  8, 9,
-  0, 10, 11, 12, 7, 8, 9, 0, 10, 11, 12, 13, 8, 9, 0, 10, 11, 12, 13, 14,
+  1, 2, 3, 4, 5, 6, 7,  8,  2, 3, 4, 5, 6, 7,  8,  9,  3, 4, 5, 6, 7,  8,  9,  0,  4, 5, 6, 7,  8,  9,  0,  10,
+  5, 6, 7, 8, 9, 0, 10, 11, 6, 7, 8, 9, 0, 10, 11, 12, 7, 8, 9, 0, 10, 11, 12, 13, 8, 9, 0, 10, 11, 12, 13, 14,
 };
 
 inline int diagonal_second[] = {
-  0, 1, 2,  3, 4,  5,  6,  7,  8, 0, 1,  2,  3,  4,  5,  6,  9,  8, 0,  1,  2,  3,
-  4, 5, 10, 9, 8,  0,  1,  2,  3, 4, 11, 10, 9,  8,  0,  1,  2,  3, 12, 11, 10, 9,
-  8, 0, 1,  2, 13, 12, 11, 10, 9, 8, 0,  1,  14, 13, 12, 11, 10, 9, 8,  0,
+  0,  1,  2, 3, 4, 5, 6, 7, 8,  0,  1,  2, 3, 4, 5, 6, 9,  8,  0,  1,  2, 3, 4, 5, 10, 9,  8,  0,  1,  2, 3, 4,
+  11, 10, 9, 8, 0, 1, 2, 3, 12, 11, 10, 9, 8, 0, 1, 2, 13, 12, 11, 10, 9, 8, 0, 1, 14, 13, 12, 11, 10, 9, 8, 0,
 };
 
-inline int ranks[] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2,
-                      2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5,
-                      5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7};
+inline int ranks[] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+                      4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7};
 
-inline int files[] = {0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5,
-                      6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3,
-                      4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7};
+inline int files[] = {0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7,
+                      0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7};
 
-const std::string board_pos[] = {
-  "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
-  "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
-  "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
-  "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8"};
+const std::string board_pos[] = {"a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2",
+                                 "f2", "g2", "h2", "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3", "a4", "b4",
+                                 "c4", "d4", "e4", "f4", "g4", "h4", "a5", "b5", "c5", "d5", "e5", "f5", "g5",
+                                 "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6", "a7", "b7", "c7", "d7",
+                                 "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8"};
+
+}  // namespace types
+}  // namespace Shahrazad
